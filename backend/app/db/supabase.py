@@ -2,28 +2,41 @@
 SpeakMate AI - Supabase Database Client
 """
 from supabase import create_client, Client
-from functools import lru_cache
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
+import logging
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
 
-@lru_cache()
+_supabase_client: Client | None = None
+
+
 def get_supabase_client() -> Client:
-    """Get cached Supabase client instance."""
-    return create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
-
-
-supabase = get_supabase_client()
+    """Get or create Supabase client instance (lazy singleton)."""
+    global _supabase_client
+    if _supabase_client is None:
+        if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
+            raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be set")
+        _supabase_client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+        logger.info("Supabase client initialized")
+    return _supabase_client
 
 
 class DatabaseService:
     """Database operations service."""
     
     def __init__(self, client: Client = None):
-        self.client = client or get_supabase_client()
+        self._client = client
+
+    @property
+    def client(self) -> Client:
+        """Lazy access to Supabase client."""
+        if self._client is None:
+            self._client = get_supabase_client()
+        return self._client
     
     # User operations
     async def get_user_profile(self, user_id: str) -> Optional[dict]:
