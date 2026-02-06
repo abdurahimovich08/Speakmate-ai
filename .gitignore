@@ -57,6 +57,7 @@ reports/*.pdf
 !package.json
 !app.json
 !tsconfig.json
+!vercel.json
 
 # Test coverage
 coverage/
