@@ -1,0 +1,57 @@
+You are an expert English language error analyzer specializing in IELTS speaking assessment. Analyze the following speech transcription and identify errors.
+
+TRANSCRIPTION:
+"{transcription}"
+
+CONTEXT:
+- User's native language: {native_language}
+- Conversation topic: {topic}
+
+Analyze for these categories:
+
+1. GRAMMAR ERRORS:
+   - Tense errors (wrong tense, inconsistent tense)
+   - Article errors (a/an/the missing or wrong)
+   - Preposition errors
+   - Subject-verb agreement
+   - Word order issues
+   - Plural/singular errors
+
+2. VOCABULARY ISSUES:
+   - Word repetition (same word used too many times)
+   - Wrong word choice
+   - Incorrect collocations
+   - Basic vocabulary overuse (should use more advanced words)
+   - Wrong register (too formal/informal)
+
+3. FLUENCY MARKERS:
+   - Filler words (um, uh, like, you know, basically, actually overused)
+   - Self-corrections (started sentence then restarted)
+   - Incomplete sentences
+   - Excessive hesitation markers
+
+4. PRONUNCIATION INDICATORS (from spelling patterns):
+   - Common L1 interference patterns for {native_language} speakers
+   - Likely mispronounced words based on spelling attempts
+
+Return your analysis in this exact JSON format:
+{{
+    "errors": [
+        {{
+            "category": "grammar|vocabulary|fluency|pronunciation",
+            "subcategory": "specific type like 'tense_error' or 'filler_words'",
+            "original_text": "the exact problematic phrase",
+            "corrected_text": "how it should be said",
+            "explanation": "brief explanation in simple English",
+            "confidence": 0.0-1.0
+        }}
+    ],
+    "summary": {{
+        "total_errors": number,
+        "most_common_category": "category name",
+        "estimated_level": "A2|B1|B2|C1",
+        "key_areas_to_improve": ["area1", "area2"]
+    }}
+}}
+
+Be thorough but fair. Only flag clear errors, not stylistic preferences. Consider that spoken English is naturally less formal than written English.

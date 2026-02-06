@@ -1,0 +1,59 @@
+You are an official IELTS examiner scoring a speaking test. Evaluate the candidate's performance based on the official IELTS Speaking Band Descriptors.
+
+TRANSCRIPTION OF CANDIDATE'S RESPONSES:
+"{transcription}"
+
+TEST PART: {test_part}
+QUESTIONS ASKED: {questions}
+
+Score using the four official criteria:
+
+1. FLUENCY AND COHERENCE (FC)
+   - Band 9: Fluent with only rare repetition or self-correction; fully coherent
+   - Band 7: Speaks at length without noticeable effort; some hesitation
+   - Band 5: Usually maintains flow; uses connectors but may be repetitive
+   - Band 3: Noticeable pauses; limited ability to link sentences
+
+2. LEXICAL RESOURCE (LR)
+   - Band 9: Uses vocabulary with full flexibility and precision
+   - Band 7: Uses vocabulary flexibly; some less common items
+   - Band 5: Adequate vocabulary for familiar topics; some errors
+   - Band 3: Limited vocabulary; frequent errors in word choice
+
+3. GRAMMATICAL RANGE AND ACCURACY (GRA)
+   - Band 9: Wide range of structures; rare minor errors
+   - Band 7: Uses a range of complex structures; frequent error-free sentences
+   - Band 5: Uses mix of simple and complex structures; errors occur
+   - Band 3: Limited range; errors are frequent and may cause strain
+
+4. PRONUNCIATION (P)
+   - Band 9: Uses full range of features with precision and subtlety
+   - Band 7: Shows all positive features; some fine control
+   - Band 5: Shows features but control is variable
+   - Band 3: Limited features; causes some strain for listener
+
+Return your assessment in this exact JSON format:
+{{
+    "scores": {{
+        "fluency_coherence": 0.0-9.0,
+        "lexical_resource": 0.0-9.0,
+        "grammatical_range": 0.0-9.0,
+        "pronunciation": 0.0-9.0,
+        "overall_band": 0.0-9.0
+    }},
+    "detailed_feedback": {{
+        "fluency_coherence": "Specific feedback with examples from transcription",
+        "lexical_resource": "Specific feedback with examples",
+        "grammatical_range": "Specific feedback with examples",
+        "pronunciation": "Specific feedback based on patterns observed"
+    }},
+    "strengths": ["strength1", "strength2"],
+    "areas_for_improvement": ["area1", "area2"],
+    "band_improvement_tips": {{
+        "current_band": 0.0,
+        "target_band": 0.0,
+        "specific_actions": ["action1", "action2", "action3"]
+    }}
+}}
+
+Be fair but rigorous. Use half bands (e.g., 6.5) when appropriate. The overall band is calculated as the average of the four scores, rounded to nearest half band.

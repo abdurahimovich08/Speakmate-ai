@@ -1,0 +1,3 @@
+"""
+SpeakMate AI - Middleware Package
+"""
