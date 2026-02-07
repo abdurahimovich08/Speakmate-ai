@@ -9,6 +9,7 @@ import base64
 from datetime import datetime
 
 from app.core.config import settings
+from app.core.security import verify_supabase_token_string
 from app.db.supabase import db_service
 from app.services.speech import SpeechService
 from app.services.conversation import ConversationService
@@ -71,25 +72,33 @@ async def conversation_websocket(
     - get_status: Get current session status
     """
     
-    # TODO: Verify token in production
-    # For now, we'll accept connections without strict auth for development
-    
+    # Enforce token auth for WebSocket sessions.
+    if not token:
+        await websocket.close(code=1008, reason="Authentication required")
+        return
+
+    try:
+        current_user = verify_supabase_token_string(token)
+    except Exception:
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
+    # Get session info from database and verify ownership before accepting.
+    session = await db_service.get_session(session_id)
+    if not session:
+        await websocket.close(code=1008, reason="Session not found")
+        return
+
+    if session.get("user_id") != current_user["user_id"]:
+        await websocket.close(code=1008, reason="Not authorized for this session")
+        return
+
     await manager.connect(websocket, session_id)
     
     # Initialize services
     speech_service = SpeechService()
     conversation_service = ConversationService()
     error_analyzer = ErrorAnalyzer()
-    
-    # Get session info from database
-    session = await db_service.get_session(session_id)
-    if not session:
-        await websocket.send_json({
-            "type": "error",
-            "data": {"message": "Session not found"}
-        })
-        await websocket.close()
-        return
     
     # Send welcome message
     await manager.send_message(session_id, {

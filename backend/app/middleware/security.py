@@ -17,6 +17,8 @@ import re
 import hashlib
 import time
 
+from app.db.supabase import db_service
+
 logger = logging.getLogger(__name__)
 
 
@@ -316,10 +318,7 @@ class AuditLogger:
     async def _save_to_db(self, entry: Dict):
         """Save audit log to database."""
         try:
-            from supabase import create_client
-            from app.core.config import settings
-            
-            client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            client = db_service.client
             
             client.table("audit_log").insert({
                 "action": entry["action"],

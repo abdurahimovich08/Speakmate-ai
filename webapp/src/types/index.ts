@@ -101,3 +101,90 @@ export interface TelegramUser {
   language_code?: string
   is_premium?: boolean
 }
+
+// ---- Super Coach ----
+export interface DailyMissionTask {
+  id: 'recall' | 'fix' | 'speak'
+  title: string
+  duration_min: number
+  instruction: string
+  items: Record<string, unknown>[]
+}
+
+export interface DailyMission {
+  mission_id: string
+  date: string
+  total_minutes: number
+  difficulty: 'supportive' | 'balanced' | 'advanced'
+  best_time_to_practice: {
+    hour: number
+    window: string
+    source: string
+  }
+  tasks: DailyMissionTask[]
+  what_am_i_not_seeing_prompt: string
+}
+
+export interface SkillNode {
+  skill_id: string
+  label: string
+  category: string
+  score: number
+  trend: 'improving' | 'declining' | 'stable'
+  trend_delta: number
+}
+
+export interface SkillGraph {
+  heatmap: SkillNode[]
+  top_weak: SkillNode[]
+  top_improving: SkillNode[]
+  focus_recommendation: string[]
+}
+
+export interface MnemonicDrill {
+  error_code: string
+  category: string
+  style: string
+  mnemonic: string
+  review_schedule_days: number[]
+  occurrence_count?: number
+  priority?: 'high' | 'medium'
+}
+
+export interface CoachMemory {
+  goals: string[]
+  confidence_blockers: string[]
+  preferred_topics: string[]
+  notes: string
+  panel_hint: string
+}
+
+export interface BehaviorInsight {
+  risk: string
+  what_am_i_not_seeing: string
+  action: string
+}
+
+export interface ProgressProof {
+  status: 'needs_more_data' | 'medium' | 'high'
+  confidence: number
+  deltas?: {
+    band_delta: number
+    filler_rate_delta: number
+    wpm_delta: number
+    pause_count_delta: number
+    grammar_accuracy_delta: number
+  }
+  highlights?: string[]
+}
+
+export interface SpeakFirstPlan {
+  mode: 'comfort' | 'standard'
+  drills: Array<{
+    id: string
+    title: string
+    duration_min: number
+    instruction: string
+    seconds?: number
+  }>
+}

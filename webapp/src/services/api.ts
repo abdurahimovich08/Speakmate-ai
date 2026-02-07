@@ -78,3 +78,96 @@ export async function getSessionErrors(sessionId: string) {
 export async function getSessionFeedback(sessionId: string) {
   return request<Record<string, unknown>>(`/api/v1/feedback/${sessionId}`)
 }
+
+// ---- Super Coach ----
+export async function getDailyMission() {
+  return request<Record<string, unknown>>('/api/v1/coach/daily-mission')
+}
+
+export async function completeDailyMission(
+  missionId: string,
+  tasksCompleted: number,
+  totalTasks: number,
+  rating?: number,
+) {
+  return request<Record<string, unknown>>(`/api/v1/coach/daily-mission/${missionId}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({
+      tasks_completed: tasksCompleted,
+      total_tasks: totalTasks,
+      rating,
+    }),
+  })
+}
+
+export async function getCoachSkillGraph() {
+  return request<Record<string, unknown>>('/api/v1/coach/skill-graph')
+}
+
+export async function getMnemonicDrills(limit = 5) {
+  return request<Record<string, unknown>>(`/api/v1/coach/mnemonic-drills?limit=${limit}`)
+}
+
+export async function submitMnemonicFeedback(
+  errorCode: string,
+  style: string,
+  helpfulness: number,
+  comment?: string,
+) {
+  return request<Record<string, unknown>>('/api/v1/coach/mnemonic-feedback', {
+    method: 'POST',
+    body: JSON.stringify({
+      error_code: errorCode,
+      style,
+      helpfulness,
+      comment,
+    }),
+  })
+}
+
+export async function getCoachProgressProof(days = 30) {
+  return request<Record<string, unknown>>(`/api/v1/coach/progress-proof?days=${days}`)
+}
+
+export async function getCoachMemory() {
+  return request<Record<string, unknown>>('/api/v1/coach/memory')
+}
+
+export async function updateCoachMemory(data: Record<string, unknown>) {
+  return request<Record<string, unknown>>('/api/v1/coach/memory', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function clearCoachMemory() {
+  return request<Record<string, unknown>>('/api/v1/coach/memory', {
+    method: 'DELETE',
+  })
+}
+
+export async function getSpeakFirstPlan(comfortMode = false) {
+  return request<Record<string, unknown>>(`/api/v1/coach/speak-first?comfort_mode=${comfortMode}`)
+}
+
+export async function getQuickDiagnosis(transcript?: string) {
+  return request<Record<string, unknown>>('/api/v1/coach/diagnosis/free', {
+    method: 'POST',
+    body: JSON.stringify({ transcript }),
+  })
+}
+
+export async function getShareCard(days = 30) {
+  return request<Record<string, unknown>>(`/api/v1/coach/share-card?days=${days}`)
+}
+
+export async function getCoachInsights(days = 30) {
+  return request<Record<string, unknown>>(`/api/v1/coach/behavior-insights?days=${days}`)
+}
+
+export async function getPublicDiagnosis(transcript: string) {
+  return request<Record<string, unknown>>('/api/v1/coach/public/diagnosis', {
+    method: 'POST',
+    body: JSON.stringify({ transcript }),
+  })
+}

@@ -28,11 +28,15 @@ async def cmd_start(message: Message):
     full_name = tg_user.full_name or "User"
 
     # Check if user exists in DB
-    user = await _get_or_create_telegram_user(
-        telegram_id=telegram_id,
-        full_name=full_name,
-        username=tg_user.username,
-    )
+    try:
+        user = await _get_or_create_telegram_user(
+            telegram_id=telegram_id,
+            full_name=full_name,
+            username=tg_user.username,
+        )
+    except Exception:
+        await message.answer("Xizmat vaqtincha mavjud emas. Iltimos keyinroq urinib ko'ring.")
+        return
 
     welcome = (
         f"👋 <b>Xush kelibsiz, {full_name}!</b>\n\n"
@@ -191,26 +195,16 @@ async def _get_or_create_telegram_user(
     username: str | None = None,
 ) -> dict:
     """Get existing user or create a new one for this Telegram account."""
-    existing = await _find_user_by_telegram_id(telegram_id)
-    if existing:
-        return existing
-
-    # Create new user
-    import uuid
-
-    user_data = {
-        "id": str(uuid.uuid4()),
-        "telegram_id": telegram_id,
-        "telegram_username": username,
-        "full_name": full_name,
-        "native_language": "uz",
-        "target_band": 7.0,
-        "auth_provider": "telegram",
-    }
-
     try:
-        response = db_service.client.table("users").insert(user_data).execute()
-        return response.data[0] if response.data else user_data
+        return await db_service.ensure_telegram_user(
+            telegram_id=telegram_id,
+            full_name=full_name,
+            username=username,
+        )
     except Exception as e:
-        logger.error(f"Failed to create Telegram user: {e}")
-        return user_data
+        logger.error(f"Failed to provision Telegram user: {e}")
+        # Fall back to lookup to avoid hard crash in bot UX.
+        existing = await _find_user_by_telegram_id(telegram_id)
+        if existing:
+            return existing
+        raise

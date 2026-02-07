@@ -14,15 +14,24 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/authStore';
+import { useCoachStore } from '@/stores/coachStore';
 import { Colors, getBandColor } from '@/constants/Colors';
+import { useEffect } from 'react';
 
 const TARGET_BANDS = [5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0];
 
 export default function ProfileScreen() {
   const { user, updateProfile, signOut, isLoading } = useAuthStore();
+  const { coachMemory, loadCoachDashboard, clearCoachMemory } = useCoachStore();
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState(user?.full_name || '');
   const [targetBand, setTargetBand] = useState(user?.target_band || 7.0);
+
+  useEffect(() => {
+    if (!coachMemory) {
+      loadCoachDashboard();
+    }
+  }, []);
 
   const handleSave = async () => {
     try {
@@ -45,6 +54,23 @@ export default function ProfileScreen() {
         },
       },
     ]);
+  };
+
+  const handleClearCoachMemory = () => {
+    Alert.alert(
+      'Clear Coach Memory',
+      'Coach will forget saved goals, blockers, and preferred topics. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            await clearCoachMemory();
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -186,6 +212,40 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Coach Memory Panel */}
+      {coachMemory && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>What Coach Remembers</Text>
+          <View style={styles.card}>
+            <Text style={styles.memoryHint}>{coachMemory.panel_hint}</Text>
+
+            <Text style={styles.memoryLabel}>Goals</Text>
+            {coachMemory.goals.length === 0 ? (
+              <Text style={styles.memoryValue}>No goals saved yet</Text>
+            ) : (
+              coachMemory.goals.slice(0, 3).map((goal, idx) => (
+                <Text key={`${goal}-${idx}`} style={styles.memoryValue}>
+                  - {goal}
+                </Text>
+              ))
+            )}
+
+            <Text style={[styles.memoryLabel, { marginTop: 10 }]}>Preferred Topics</Text>
+            {coachMemory.preferred_topics.length === 0 ? (
+              <Text style={styles.memoryValue}>No preferred topics yet</Text>
+            ) : (
+              <Text style={styles.memoryValue}>
+                {coachMemory.preferred_topics.slice(0, 5).join(', ')}
+              </Text>
+            )}
+
+            <TouchableOpacity style={styles.clearMemoryButton} onPress={handleClearCoachMemory}>
+              <Text style={styles.clearMemoryText}>Clear Memory</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Support */}
       <View style={styles.section}>
@@ -418,5 +478,33 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     color: '#a0aec0',
+  },
+  memoryHint: {
+    fontSize: 12,
+    color: '#4b5563',
+    marginBottom: 8,
+  },
+  memoryLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  memoryValue: {
+    fontSize: 13,
+    color: '#4b5563',
+    marginBottom: 2,
+  },
+  clearMemoryButton: {
+    marginTop: 12,
+    borderRadius: 8,
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  clearMemoryText: {
+    color: '#b91c1c',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

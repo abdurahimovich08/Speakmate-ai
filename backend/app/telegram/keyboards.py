@@ -28,7 +28,7 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(
-                text="🎙 Open SpeakMate",
+                text="Open SpeakMate",
                 web_app=WebAppInfo(url=get_webapp_url())
             )],
         ],
@@ -44,19 +44,23 @@ def start_inline_keyboard() -> InlineKeyboardMarkup:
     """Inline keyboard shown after /start."""
     buttons = [
         [InlineKeyboardButton(
-            text="🎙 Start Practice",
+            text="Start Practice",
             web_app=WebAppInfo(url=get_webapp_url("/practice"))
         )],
         [InlineKeyboardButton(
-            text="📊 My Progress",
+            text="Daily Mission",
+            web_app=WebAppInfo(url=get_webapp_url("/coach"))
+        )],
+        [InlineKeyboardButton(
+            text="My Progress",
             web_app=WebAppInfo(url=get_webapp_url("/history"))
         )],
         [InlineKeyboardButton(
-            text="👤 Profile",
+            text="Profile",
             web_app=WebAppInfo(url=get_webapp_url("/profile"))
         )],
         [InlineKeyboardButton(
-            text="ℹ️ Help",
+            text="Help",
             callback_data="help"
         )],
     ]
@@ -67,15 +71,15 @@ def practice_mode_keyboard() -> InlineKeyboardMarkup:
     """Select practice mode."""
     buttons = [
         [InlineKeyboardButton(
-            text="💬 Free Speaking",
+            text="Free Speaking",
             web_app=WebAppInfo(url=get_webapp_url("/practice?mode=free_speaking"))
         )],
         [InlineKeyboardButton(
-            text="📝 IELTS Mock Test",
+            text="IELTS Mock Test",
             web_app=WebAppInfo(url=get_webapp_url("/practice?mode=ielts_test"))
         )],
         [InlineKeyboardButton(
-            text="🏋️ Training",
+            text="Training",
             web_app=WebAppInfo(url=get_webapp_url("/practice?mode=training"))
         )],
     ]
@@ -86,11 +90,11 @@ def session_result_keyboard(session_id: str) -> InlineKeyboardMarkup:
     """View detailed results for a session."""
     buttons = [
         [InlineKeyboardButton(
-            text="📋 View Details",
+            text="View Details",
             web_app=WebAppInfo(url=get_webapp_url(f"/results/{session_id}"))
         )],
         [InlineKeyboardButton(
-            text="🔄 Practice Again",
+            text="Practice Again",
             web_app=WebAppInfo(url=get_webapp_url("/practice"))
         )],
     ]

@@ -9,6 +9,12 @@ import type {
   SessionFeedback,
   UserStats,
   ErrorProfile,
+  DailyMission,
+  MnemonicDrill,
+  SkillGraph,
+  CoachMemory,
+  ProgressProof,
+  BehaviorInsight,
 } from '@/types';
 
 class ApiClient {
@@ -104,7 +110,7 @@ class ApiClient {
     return this.request<any[]>(`/sessions/${sessionId}/conversation`);
   }
 
-  async getSessionErrors(sessionId: string): Promise<any[]> {
+  async getRawSessionErrors(sessionId: string): Promise<any[]> {
     return this.request<any[]>(`/sessions/${sessionId}/errors`);
   }
 
@@ -174,9 +180,10 @@ class ApiClient {
   }
 
   async completeTrainingTask(taskId: string, score: number): Promise<any> {
+    const wasCorrect = score <= 1 ? score >= 0.7 : score >= 70;
     return this.request<any>(`/training/tasks/${taskId}/complete`, {
       method: 'POST',
-      body: JSON.stringify({ score }),
+      body: JSON.stringify({ score, was_correct: wasCorrect }),
     });
   }
 
@@ -186,6 +193,109 @@ class ApiClient {
 
   async getTrainingProgress(): Promise<any> {
     return this.request<any>('/training/progress');
+  }
+
+  // Super Coach endpoints
+  async getDailyMission(): Promise<DailyMission> {
+    return this.request<DailyMission>('/coach/daily-mission');
+  }
+
+  async completeDailyMission(
+    missionId: string,
+    tasksCompleted: number,
+    totalTasks: number,
+    rating?: number
+  ): Promise<{ status: string; mission_id: string; success_rate: number }> {
+    return this.request<{ status: string; mission_id: string; success_rate: number }>(
+      `/coach/daily-mission/${missionId}/complete`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          tasks_completed: tasksCompleted,
+          total_tasks: totalTasks,
+          rating,
+        }),
+      }
+    );
+  }
+
+  async getMnemonicDrills(limit = 5): Promise<{ drills: MnemonicDrill[]; persistence: { created: number; updated: number } }> {
+    return this.request<{ drills: MnemonicDrill[]; persistence: { created: number; updated: number } }>(
+      `/coach/mnemonic-drills?limit=${limit}`
+    );
+  }
+
+  async submitMnemonicFeedback(
+    errorCode: string,
+    style: string,
+    helpfulness: number,
+    comment?: string
+  ): Promise<{ status: string; average_helpfulness: number; samples: number }> {
+    return this.request<{ status: string; average_helpfulness: number; samples: number }>(
+      '/coach/mnemonic-feedback',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          error_code: errorCode,
+          style,
+          helpfulness,
+          comment,
+        }),
+      }
+    );
+  }
+
+  async getSkillGraph(): Promise<SkillGraph> {
+    return this.request<SkillGraph>('/coach/skill-graph');
+  }
+
+  async getCoachMemory(): Promise<CoachMemory> {
+    return this.request<CoachMemory>('/coach/memory');
+  }
+
+  async updateCoachMemory(patch: Partial<CoachMemory>): Promise<CoachMemory> {
+    return this.request<CoachMemory>('/coach/memory', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async clearCoachMemory(): Promise<{ status: string }> {
+    return this.request<{ status: string }>('/coach/memory', {
+      method: 'DELETE',
+    });
+  }
+
+  async getProgressProof(days = 30): Promise<{ proof: ProgressProof; session_count: number }> {
+    return this.request<{ proof: ProgressProof; session_count: number }>(`/coach/progress-proof?days=${days}`);
+  }
+
+  async getSpeakFirstPlan(comfortMode = false): Promise<any> {
+    return this.request<any>(`/coach/speak-first?comfort_mode=${comfortMode}`);
+  }
+
+  async getQuickDiagnosis(transcript?: string): Promise<any> {
+    return this.request<any>('/coach/diagnosis/free', {
+      method: 'POST',
+      body: JSON.stringify({ transcript }),
+    });
+  }
+
+  async getPublicDiagnosis(transcript: string): Promise<any> {
+    return this.request<any>('/coach/public/diagnosis', {
+      method: 'POST',
+      body: JSON.stringify({ transcript }),
+    });
+  }
+
+  async getShareCard(days = 30): Promise<any> {
+    return this.request<any>(`/coach/share-card?days=${days}`);
+  }
+
+  async getBehaviorInsights(days = 30): Promise<{ insights: BehaviorInsight[]; mission_completion_rate?: number }> {
+    return this.request<{ insights: BehaviorInsight[]; mission_completion_rate?: number }>(
+      `/coach/behavior-insights?days=${days}`
+    );
   }
 }
 

@@ -35,7 +35,9 @@ def get_dispatcher() -> Dispatcher:
         _dp = Dispatcher()
         # Register handlers
         from app.telegram.handlers import router as handlers_router
+        from app.telegram.coach_handlers import router as coach_router
         _dp.include_router(handlers_router)
+        _dp.include_router(coach_router)
         logger.info("Telegram bot handlers registered")
     return _dp
 

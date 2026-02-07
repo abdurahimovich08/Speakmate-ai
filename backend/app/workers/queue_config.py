@@ -161,6 +161,30 @@ class QueueManager:
             queue_name="low",
             job_timeout=300
         )
+
+    def enqueue_daily_reminders(self, limit: int = 200, force: bool = False):
+        """Enqueue daily mission reminder notifications."""
+        from app.workers.notification_worker import run_daily_reminders
+
+        return self.enqueue(
+            run_daily_reminders,
+            limit,
+            force,
+            queue_name="high",
+            job_timeout=300,
+        )
+
+    def enqueue_streak_notifications(self, limit: int = 200, force: bool = False):
+        """Enqueue streak milestone notifications."""
+        from app.workers.notification_worker import run_streak_notifications
+
+        return self.enqueue(
+            run_streak_notifications,
+            limit,
+            force,
+            queue_name="high",
+            job_timeout=300,
+        )
     
     def get_job_status(self, job_id: str) -> dict:
         """Get status of a job."""

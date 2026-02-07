@@ -206,11 +206,8 @@ class QuotaService:
     
     async def _get_user_plan(self, user_id: str) -> Dict:
         """Get user's plan data from database."""
-        from supabase import create_client
-        from app.core.config import settings
-        
         try:
-            client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            client = db_service.client
             response = client.table('user_plans').select('*').eq('user_id', user_id).single().execute()
             return response.data if response.data else {'plan': 'free'}
         except:

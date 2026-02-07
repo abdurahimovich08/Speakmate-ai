@@ -149,14 +149,41 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
       const response = await api.getSessionAnalysis(sessionId);
 
       if (response) {
+        const deep = response.deep_analysis || null;
+        const fast = response.fast_analysis || null;
+        const selectedType = response.analysis_type || (deep ? 'deep' : fast ? 'fast' : null);
+        const selectedAnalysis =
+          response.analysis ||
+          deep?.results ||
+          deep?.result ||
+          fast?.results ||
+          fast?.result ||
+          {};
+
+        const selectedScores =
+          response.scores ||
+          deep?.scores ||
+          (deep?.results || deep?.result || {}).scores ||
+          fast?.scores ||
+          (fast?.results || fast?.result || {}).scores ||
+          {};
+
+        const getBand = (value: any): number => {
+          if (typeof value === 'number') return value;
+          if (value && typeof value.band === 'number') return value.band;
+          return 0;
+        };
+
+        const errors = response.errors || selectedAnalysis.errors || [];
+
         // Map backend response to our AnalysisData format
         const analysis: AnalysisData = {
           sessionId,
-          overallBand: response.scores?.overall_band || 0,
-          
+          overallBand: getBand(selectedScores.overall_band || selectedScores.overall_score),
+
           grammar: {
-            score: response.scores?.grammatical_range || 0,
-            errors: (response.errors || [])
+            score: getBand(selectedScores.grammatical_range),
+            errors: errors
               .filter((e: any) => e.category === 'grammar')
               .map((e: any, i: number) => ({
                 id: e.id || `grammar-${i}`,
@@ -165,22 +192,22 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
                 corrected: e.corrected_text || '',
                 explanation: e.explanation || '',
               })),
-            fillerWords: response.analysis?.filler_count || 0,
+            fillerWords: selectedAnalysis.filler_count || 0,
           },
-          
+
           fluency: {
-            score: response.scores?.fluency_coherence || 0,
-            wordsPerMinute: response.analysis?.words_per_minute || 0,
-            syllablesPerMinute: response.analysis?.syllables_per_minute || 0,
-            awkwardPauses: response.analysis?.pause_count || 0,
-            improvedSpeech: response.analysis?.improved_speech || '',
-            speakingRate: response.analysis?.speaking_rate || 'normal',
+            score: getBand(selectedScores.fluency_coherence),
+            wordsPerMinute: selectedAnalysis.words_per_minute || 0,
+            syllablesPerMinute: selectedAnalysis.syllables_per_minute || 0,
+            awkwardPauses: selectedAnalysis.pause_count || 0,
+            improvedSpeech: selectedAnalysis.improved_speech || '',
+            speakingRate: selectedAnalysis.speaking_rate || 'normal',
           },
-          
+
           vocabulary: {
-            score: response.scores?.lexical_resource || 0,
-            wordLevels: response.analysis?.word_levels || { A1: 0, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 },
-            suggestions: (response.errors || [])
+            score: getBand(selectedScores.lexical_resource),
+            wordLevels: selectedAnalysis.word_levels || { A1: 0, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 },
+            suggestions: errors
               .filter((e: any) => e.category === 'vocabulary')
               .map((e: any, i: number) => ({
                 id: e.id || `vocab-${i}`,
@@ -190,24 +217,24 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
                 original: e.original_text || '',
                 corrected: e.corrected_text || '',
               })),
-            uniqueWords: response.analysis?.unique_words || 0,
-            totalWords: response.analysis?.total_words || 0,
+            uniqueWords: selectedAnalysis.unique_words || 0,
+            totalWords: selectedAnalysis.total_words || 0,
           },
-          
+
           pronunciation: {
-            score: response.scores?.pronunciation || 0,
-            wordsToImprove: (response.errors || [])
+            score: getBand(selectedScores.pronunciation),
+            wordsToImprove: errors
               .filter((e: any) => e.category === 'pronunciation')
               .map((e: any) => ({
                 word: e.original_text || '',
                 ipa: e.ipa || '',
                 accuracy: e.confidence || 0,
               })),
-            overallClarity: response.analysis?.clarity_score || 0,
-            intonation: response.analysis?.intonation_score || 0,
+            overallClarity: selectedAnalysis.clarity_score || 0,
+            intonation: selectedAnalysis.intonation_score || 0,
           },
-          
-          sessionDuration: response.session?.duration || 0,
+
+          sessionDuration: response.session?.duration_seconds || response.session?.duration || 0,
           recordingUrl: response.session?.recording_url,
           createdAt: new Date(response.created_at || Date.now()),
         };
@@ -215,8 +242,8 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         set({
           analysis,
           isLoading: false,
-          isFastAnalysisReady: true,
-          isDeepAnalysisReady: response.analysis_type === 'deep',
+          isFastAnalysisReady: !!fast || selectedType === 'fast' || selectedType === 'deep',
+          isDeepAnalysisReady: selectedType === 'deep' || !!deep,
         });
       } else {
         // Create empty analysis if none exists yet

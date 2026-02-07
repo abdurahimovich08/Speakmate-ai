@@ -1,25 +1,24 @@
 /* ===========================
-   Layout — Telegram-theme-aware shell with tab navigation
+   Layout - Telegram-theme-aware shell with tab navigation
    =========================== */
 
 import { NavLink, Outlet } from 'react-router-dom'
 
 const tabs = [
-  { to: '/', icon: '🏠', label: 'Home' },
-  { to: '/practice', icon: '🎙', label: 'Practice' },
-  { to: '/history', icon: '📊', label: 'History' },
-  { to: '/profile', icon: '👤', label: 'Profile' },
+  { to: '/', icon: 'H', label: 'Home' },
+  { to: '/coach', icon: 'C', label: 'Coach' },
+  { to: '/practice', icon: 'P', label: 'Practice' },
+  { to: '/history', icon: 'R', label: 'History' },
+  { to: '/profile', icon: 'U', label: 'Profile' },
 ]
 
 export default function Layout() {
   return (
     <div className="flex flex-col min-h-screen bg-tg-bg text-tg-text">
-      {/* Page content */}
       <main className="flex-1 pb-20 overflow-y-auto">
         <Outlet />
       </main>
 
-      {/* Bottom tab bar */}
       <nav className="fixed bottom-0 left-0 right-0 bg-tg-section border-t border-tg-secondary flex z-50">
         {tabs.map((tab) => (
           <NavLink
@@ -32,7 +31,7 @@ export default function Layout() {
               }`
             }
           >
-            <span className="text-lg">{tab.icon}</span>
+            <span className="text-lg font-semibold">{tab.icon}</span>
             <span className="mt-0.5">{tab.label}</span>
           </NavLink>
         ))}

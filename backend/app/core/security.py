@@ -48,14 +48,19 @@ async def verify_supabase_token(
     In development mode (no JWT secret), it decodes without signature verification.
     In production, it verifies with the Supabase JWT secret.
     """
-    token = credentials.credentials
-    
+    return verify_supabase_token_string(credentials.credentials)
+
+
+def verify_supabase_token_string(token: str) -> dict:
+    """
+    Verify a Supabase JWT token string and return normalized user payload.
+
+    This helper is shared by HTTP dependencies and WebSocket handlers.
+    """
     try:
-        # Determine if we should verify signature
         jwt_secret = settings.SUPABASE_JWT_SECRET
-        
+
         if jwt_secret:
-            # Production: Verify signature with JWT secret
             payload = jwt.decode(
                 token,
                 jwt_secret,
@@ -63,25 +68,23 @@ async def verify_supabase_token(
                 audience="authenticated"
             )
         else:
-            # Development: Decode without signature verification
-            # WARNING: Only for development! Set SUPABASE_JWT_SECRET in production
+            # Development fallback only.
             logger.warning("JWT verification disabled - set SUPABASE_JWT_SECRET for production")
             payload = decode_jwt_unverified(token)
-        
+
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token: no user ID"
             )
-        
+
         return {
             "user_id": user_id,
             "email": payload.get("email"),
             "phone": payload.get("phone"),
             "role": payload.get("role", "authenticated")
         }
-        
     except JWTError as e:
         logger.error(f"JWT verification failed: {e}")
         raise HTTPException(

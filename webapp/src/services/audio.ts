@@ -95,7 +95,13 @@ export class AudioRecorder {
 
 /** Check if browser supports audio recording */
 export function isAudioSupported(): boolean {
-  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)
+  return (
+    typeof window !== 'undefined' &&
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === 'function' &&
+    typeof window.MediaRecorder !== 'undefined'
+  )
 }
 
 /** Request microphone permission and return whether granted */

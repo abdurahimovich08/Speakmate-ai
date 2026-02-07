@@ -67,10 +67,7 @@ async def _generate_tasks(user_id: str, error_codes: List[str]) -> Dict:
 
 async def _save_training_task(task: Dict):
     """Save training task to database."""
-    from supabase import create_client
-    from app.core.config import settings
-    
-    client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+    client = db_service.client
     
     client.table("training_tasks").insert({
         "user_id": task["user_id"],

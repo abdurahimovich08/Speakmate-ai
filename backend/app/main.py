@@ -16,9 +16,8 @@ import sys
 
 from app.core.config import settings
 from app.api.routes import users, sessions, feedback, auth
-from app.api.routes import training, analysis
+from app.api.routes import training, analysis, coach
 from app.api.websocket.conversation import router as ws_router
-from app.telegram.webhook import router as telegram_router
 from app.middleware.security import (
     RateLimitMiddleware,
     RequestValidationMiddleware,
@@ -32,6 +31,13 @@ from app.middleware.monitoring import (
     error_tracker
 )
 
+telegram_router = None
+telegram_import_error = None
+try:
+    from app.telegram.webhook import router as telegram_router
+except Exception as exc:
+    telegram_import_error = exc
+
 # Configure logging
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -43,6 +49,8 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
+    if telegram_import_error:
+        logger.warning(f"Telegram module unavailable: {telegram_import_error}")
     
     # Initialize services
     try:
@@ -50,17 +58,20 @@ async def lifespan(app: FastAPI):
         if settings.REDIS_ENABLED:
             from app.workers.queue_config import QueueManager
             queue = QueueManager()
-            if queue.redis:
+            if queue.is_connected:
                 logger.info("Redis connection established")
             else:
                 logger.warning("Redis not available, using sync processing")
         
         # Initialize Telegram bot if token is set
         if settings.TELEGRAM_BOT_TOKEN:
-            from app.telegram.bot import setup_webhook, get_dispatcher
-            get_dispatcher()  # register handlers
-            await setup_webhook()
-            logger.info("Telegram bot initialized")
+            if telegram_router is None:
+                logger.warning("TELEGRAM_BOT_TOKEN is set but Telegram dependencies are unavailable")
+            else:
+                from app.telegram.bot import setup_webhook, get_dispatcher
+                get_dispatcher()  # register handlers
+                await setup_webhook()
+                logger.info("Telegram bot initialized")
         
         # Initialize Sentry if configured
         if settings.SENTRY_DSN:
@@ -80,7 +91,7 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    if settings.TELEGRAM_BOT_TOKEN:
+    if settings.TELEGRAM_BOT_TOKEN and telegram_router is not None:
         from app.telegram.bot import shutdown_bot
         await shutdown_bot()
     logger.info("Shutting down application")
@@ -191,8 +202,10 @@ app.include_router(sessions.router, prefix="/api/v1", tags=["sessions"])
 app.include_router(feedback.router, prefix="/api/v1", tags=["feedback"])
 app.include_router(training.router, prefix="/api/v1", tags=["training"])
 app.include_router(analysis.router, prefix="/api/v1", tags=["analysis"])
+app.include_router(coach.router, prefix="/api/v1", tags=["coach"])
 app.include_router(ws_router, tags=["websocket"])
-app.include_router(telegram_router, tags=["telegram"])
+if telegram_router is not None:
+    app.include_router(telegram_router, tags=["telegram"])
 
 
 if __name__ == "__main__":

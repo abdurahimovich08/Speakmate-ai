@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: Optional[str] = None
     TELEGRAM_WEBHOOK_URL: Optional[str] = None
     TELEGRAM_WEBAPP_URL: Optional[str] = None
+
+    # Scheduled jobs / cron triggers
+    CRON_SECRET: Optional[str] = None
     
     # Sentry
     SENTRY_DSN: Optional[str] = None

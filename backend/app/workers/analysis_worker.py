@@ -15,7 +15,6 @@ from app.services.hybrid_analyzer import HybridErrorAnalyzer
 from app.services.pronunciation_engine import PronunciationAnalyzer
 from app.services.ielts_scorer_production import IELTSScorerProduction
 from app.services.prompt_manager import prompt_manager
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -315,10 +314,7 @@ async def create_analysis_run(
     prompt_version: str
 ) -> str:
     """Create analysis run record."""
-    from supabase import create_client
-    from app.core.config import settings
-    
-    client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+    client = db_service.client
     
     # Get user_id from session
     session = await db_service.get_session(session_id)
@@ -347,10 +343,7 @@ async def update_analysis_run(
     last_error: str = None
 ):
     """Update analysis run record."""
-    from supabase import create_client
-    from app.core.config import settings
-    
-    client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+    client = db_service.client
     
     update_data = {
         "status": status,
@@ -375,10 +368,7 @@ async def update_analysis_run(
 
 async def save_error_instance(session_id: str, run_id: str, error: Dict):
     """Save error instance to database."""
-    from supabase import create_client
-    from app.core.config import settings
-    
-    client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+    client = db_service.client
     
     client.table("error_instances").insert({
         "session_id": session_id,

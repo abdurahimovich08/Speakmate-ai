@@ -15,6 +15,7 @@ from app.services.hybrid_analyzer import HybridErrorAnalyzer
 from app.services.pronunciation_engine import PronunciationAnalyzer
 from app.services.ielts_scorer_production import ielts_scorer
 from app.workers.queue_config import QueueManager
+from app.db.supabase import db_service
 
 logger = logging.getLogger(__name__)
 
@@ -462,23 +463,36 @@ class AnalysisCoordinator:
     ):
         """Save analysis run to database."""
         try:
-            from supabase import create_client
-            from app.core.config import settings
-            
-            client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
-            
-            client.table("analysis_runs").insert({
+            client = db_service.client
+
+            primary_payload = {
                 "id": run_id,
                 "session_id": session_id,
                 "user_id": user_id,
-                "analysis_type": analysis_type,
+                "run_type": analysis_type,
                 "status": status,
-                "result": result,
+                "results": result,
                 "prompt_version": "v1",
                 "model_version": "gemini-pro",
                 "processing_time_ms": duration_ms,
-                "tokens_used": tokens_used
-            }).execute()
+                "tokens_used": tokens_used,
+            }
+            try:
+                client.table("analysis_runs").insert(primary_payload).execute()
+            except Exception:
+                legacy_payload = {
+                    "id": run_id,
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "analysis_type": analysis_type,
+                    "status": status,
+                    "result": result,
+                    "prompt_version": "v1",
+                    "model_version": "gemini-pro",
+                    "processing_time_ms": duration_ms,
+                    "tokens_used": tokens_used,
+                }
+                client.table("analysis_runs").insert(legacy_payload).execute()
             
         except Exception as e:
             logger.error(f"Failed to save analysis run: {e}")
@@ -491,10 +505,7 @@ class AnalysisCoordinator:
     ):
         """Save individual errors to database."""
         try:
-            from supabase import create_client
-            from app.core.config import settings
-            
-            client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            client = db_service.client
             
             for error in errors:
                 client.table("error_instances").insert({
