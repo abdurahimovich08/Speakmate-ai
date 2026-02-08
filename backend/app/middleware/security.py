@@ -133,6 +133,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """Rate limiting middleware."""
     
     async def dispatch(self, request: Request, call_next):
+        # Always allow CORS preflight requests.
+        if request.method.upper() == "OPTIONS":
+            return await call_next(request)
+
         # Get client identifier
         client_ip = self._get_client_ip(request)
         user_id = self._get_user_id(request)

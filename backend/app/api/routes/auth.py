@@ -3,7 +3,7 @@ SpeakMate AI - Authentication Routes (Telegram)
 """
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from app.core.telegram_auth import validate_telegram_init_data, create_internal_jwt
@@ -39,11 +39,24 @@ async def authenticate_telegram(body: TelegramAuthRequest):
     )
     username = tg_user.get("username")
 
-    user = await db_service.ensure_telegram_user(
-        telegram_id=telegram_id,
-        full_name=full_name,
-        username=username,
-    )
+    try:
+        user = await db_service.ensure_telegram_user(
+            telegram_id=telegram_id,
+            full_name=full_name,
+            username=username,
+        )
+    except Exception as exc:
+        message = str(exc)
+        logger.error("Telegram user provisioning failed: %s", message, exc_info=True)
+        if any(token in message.lower() for token in ("telegram_id", "telegram_username", "auth_provider")):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Telegram columns are missing in public.users. Run Telegram migration SQL first.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Telegram authentication setup failed. Check SUPABASE_SERVICE_ROLE_KEY and user schema.",
+        )
 
     token = create_internal_jwt(
         user_id=user["id"],

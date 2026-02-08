@@ -101,25 +101,34 @@ ALTER TABLE public.coach_mnemonic_feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coach_behavior_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coach_notification_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own coach missions" ON public.coach_daily_missions;
 CREATE POLICY "Users can view own coach missions" ON public.coach_daily_missions
     FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own coach missions" ON public.coach_daily_missions;
 CREATE POLICY "Users can update own coach missions" ON public.coach_daily_missions
     FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own coach missions" ON public.coach_daily_missions;
 CREATE POLICY "Users can insert own coach missions" ON public.coach_daily_missions
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can view own mnemonic feedback" ON public.coach_mnemonic_feedback;
 CREATE POLICY "Users can view own mnemonic feedback" ON public.coach_mnemonic_feedback
     FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own mnemonic feedback" ON public.coach_mnemonic_feedback;
 CREATE POLICY "Users can insert own mnemonic feedback" ON public.coach_mnemonic_feedback
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can view own behavior events" ON public.coach_behavior_events;
 CREATE POLICY "Users can view own behavior events" ON public.coach_behavior_events
     FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own behavior events" ON public.coach_behavior_events;
 CREATE POLICY "Users can insert own behavior events" ON public.coach_behavior_events
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can view own notification events" ON public.coach_notification_events;
 CREATE POLICY "Users can view own notification events" ON public.coach_notification_events
     FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own notification events" ON public.coach_notification_events;
 CREATE POLICY "Users can insert own notification events" ON public.coach_notification_events
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
@@ -130,4 +139,3 @@ GRANT ALL ON TABLE public.coach_daily_missions TO authenticated;
 GRANT ALL ON TABLE public.coach_mnemonic_feedback TO authenticated;
 GRANT ALL ON TABLE public.coach_behavior_events TO authenticated;
 GRANT ALL ON TABLE public.coach_notification_events TO authenticated;
-

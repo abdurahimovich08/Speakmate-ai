@@ -107,15 +107,6 @@ app = FastAPI(
     redoc_url="/redoc" if settings.DEBUG else None
 )
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Add security middleware
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestValidationMiddleware)
@@ -124,6 +115,15 @@ if settings.RATE_LIMIT_ENABLED:
 
 # Add monitoring middleware
 app.add_middleware(RequestTracingMiddleware)
+
+# Add CORS middleware last so it wraps all responses (including middleware/errors)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # Exception handlers

@@ -12,47 +12,97 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- =============================================================================
 
 -- Session modes
-CREATE TYPE session_mode AS ENUM (
-    'free_speaking',
-    'ielts_test',
-    'ielts_part1',
-    'ielts_part2',
-    'ielts_part3',
-    'training'
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE t.typname = 'session_mode' AND n.nspname = 'public'
+    ) THEN
+        CREATE TYPE session_mode AS ENUM (
+            'free_speaking',
+            'ielts_test',
+            'ielts_part1',
+            'ielts_part2',
+            'ielts_part3',
+            'training'
+        );
+    END IF;
+END $$;
 
 -- Error categories
-CREATE TYPE error_category AS ENUM (
-    'pronunciation',
-    'grammar',
-    'vocabulary',
-    'fluency'
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE t.typname = 'error_category' AND n.nspname = 'public'
+    ) THEN
+        CREATE TYPE error_category AS ENUM (
+            'pronunciation',
+            'grammar',
+            'vocabulary',
+            'fluency'
+        );
+    END IF;
+END $$;
 
 -- Error severity levels
-CREATE TYPE error_severity AS ENUM (
-    'minor',      -- Doesn't affect understanding
-    'moderate',   -- May cause confusion
-    'major',      -- Significantly impacts communication
-    'critical'    -- Prevents understanding
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE t.typname = 'error_severity' AND n.nspname = 'public'
+    ) THEN
+        CREATE TYPE error_severity AS ENUM (
+            'minor',      -- Doesn't affect understanding
+            'moderate',   -- May cause confusion
+            'major',      -- Significantly impacts communication
+            'critical'    -- Prevents understanding
+        );
+    END IF;
+END $$;
 
 -- Analysis status
-CREATE TYPE analysis_status AS ENUM (
-    'pending',
-    'running',
-    'completed',
-    'failed',
-    'cancelled'
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE t.typname = 'analysis_status' AND n.nspname = 'public'
+    ) THEN
+        CREATE TYPE analysis_status AS ENUM (
+            'pending',
+            'running',
+            'completed',
+            'failed',
+            'cancelled'
+        );
+    END IF;
+END $$;
 
 -- User plan types
-CREATE TYPE user_plan AS ENUM (
-    'free',
-    'basic',
-    'premium',
-    'enterprise'
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE t.typname = 'user_plan' AND n.nspname = 'public'
+    ) THEN
+        CREATE TYPE user_plan AS ENUM (
+            'free',
+            'basic',
+            'premium',
+            'enterprise'
+        );
+    END IF;
+END $$;
 
 -- =============================================================================
 -- CORE TABLES
@@ -64,6 +114,9 @@ CREATE TABLE IF NOT EXISTS public.users (
     email TEXT,
     phone TEXT,
     full_name TEXT,
+    telegram_id BIGINT UNIQUE,
+    telegram_username TEXT,
+    auth_provider TEXT DEFAULT 'supabase',
     native_language TEXT DEFAULT 'uz',
     target_band DECIMAL(2,1) DEFAULT 7.0 CHECK (target_band >= 0 AND target_band <= 9),
     avatar_url TEXT,
@@ -84,6 +137,11 @@ CREATE TABLE IF NOT EXISTS public.users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Backward-compatible Telegram columns for existing deployments.
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS telegram_id BIGINT UNIQUE;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS telegram_username TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'supabase';
 
 -- User Plans / Subscriptions
 CREATE TABLE IF NOT EXISTS public.user_plans (
@@ -439,6 +497,7 @@ CREATE TABLE IF NOT EXISTS public.audit_log (
 
 -- Users
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
+CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON public.users(telegram_id);
 
 -- Sessions
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON public.sessions(user_id);
@@ -498,70 +557,89 @@ ALTER TABLE public.prompt_registry ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
 
 -- Users policies
+DROP POLICY IF EXISTS "Users can view own profile" ON public.users;
 CREATE POLICY "Users can view own profile" ON public.users
     FOR SELECT USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 CREATE POLICY "Users can update own profile" ON public.users
     FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.users;
 CREATE POLICY "Users can insert own profile" ON public.users
     FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- User plans policies
+DROP POLICY IF EXISTS "Users can view own plan" ON public.user_plans;
 CREATE POLICY "Users can view own plan" ON public.user_plans
     FOR SELECT USING (auth.uid() = user_id);
 
 -- Sessions policies
+DROP POLICY IF EXISTS "Users can view own sessions" ON public.sessions;
 CREATE POLICY "Users can view own sessions" ON public.sessions
     FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can create own sessions" ON public.sessions;
 CREATE POLICY "Users can create own sessions" ON public.sessions
     FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own sessions" ON public.sessions;
 CREATE POLICY "Users can update own sessions" ON public.sessions
     FOR UPDATE USING (auth.uid() = user_id);
 
 -- Session assets policies
+DROP POLICY IF EXISTS "Users can view own assets" ON public.session_assets;
 CREATE POLICY "Users can view own assets" ON public.session_assets
     FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can create own assets" ON public.session_assets;
 CREATE POLICY "Users can create own assets" ON public.session_assets
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- Conversation turns policies (via session ownership)
+DROP POLICY IF EXISTS "Users can view own turns" ON public.conversation_turns;
 CREATE POLICY "Users can view own turns" ON public.conversation_turns
     FOR SELECT USING (
         EXISTS (SELECT 1 FROM public.sessions WHERE sessions.id = conversation_turns.session_id AND sessions.user_id = auth.uid())
     );
+DROP POLICY IF EXISTS "Users can insert own turns" ON public.conversation_turns;
 CREATE POLICY "Users can insert own turns" ON public.conversation_turns
     FOR INSERT WITH CHECK (
         EXISTS (SELECT 1 FROM public.sessions WHERE sessions.id = conversation_turns.session_id AND sessions.user_id = auth.uid())
     );
 
 -- Analysis runs policies
+DROP POLICY IF EXISTS "Users can view own analysis" ON public.analysis_runs;
 CREATE POLICY "Users can view own analysis" ON public.analysis_runs
     FOR SELECT USING (auth.uid() = user_id);
 
 -- Error instances policies (via session)
+DROP POLICY IF EXISTS "Users can view own errors" ON public.error_instances;
 CREATE POLICY "Users can view own errors" ON public.error_instances
     FOR SELECT USING (
         EXISTS (SELECT 1 FROM public.sessions WHERE sessions.id = error_instances.session_id AND sessions.user_id = auth.uid())
     );
 
 -- Error profiles policies
+DROP POLICY IF EXISTS "Users can view own profiles" ON public.error_profiles;
 CREATE POLICY "Users can view own profiles" ON public.error_profiles
     FOR SELECT USING (auth.uid() = user_id);
 
 -- Training tasks policies
+DROP POLICY IF EXISTS "Users can view own tasks" ON public.training_tasks;
 CREATE POLICY "Users can view own tasks" ON public.training_tasks
     FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own tasks" ON public.training_tasks;
 CREATE POLICY "Users can update own tasks" ON public.training_tasks
     FOR UPDATE USING (auth.uid() = user_id);
 
 -- IELTS questions - readable by all authenticated users
+DROP POLICY IF EXISTS "Authenticated users can view questions" ON public.ielts_questions;
 CREATE POLICY "Authenticated users can view questions" ON public.ielts_questions
     FOR SELECT USING (auth.role() = 'authenticated' AND is_active = true);
 
 -- Prompt registry - readable by service role only (server-side)
+DROP POLICY IF EXISTS "Service can read prompts" ON public.prompt_registry;
 CREATE POLICY "Service can read prompts" ON public.prompt_registry
     FOR SELECT USING (auth.jwt() ->> 'role' = 'service_role');
 
 -- Audit log - viewable by user for own entries
+DROP POLICY IF EXISTS "Users can view own audit" ON public.audit_log;
 CREATE POLICY "Users can view own audit" ON public.audit_log
     FOR SELECT USING (auth.uid() = user_id);
 
