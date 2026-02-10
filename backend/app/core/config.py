@@ -84,10 +84,20 @@ class Settings(BaseSettings):
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, value):
+        def normalize_origin(origin_value) -> Optional[str]:
+            origin = str(origin_value).strip().strip('"').strip("'")
+            if not origin:
+                return None
+            if origin != "*":
+                origin = origin.rstrip("/")
+            return origin
+
         if value is None:
             return ["*"]
         if isinstance(value, list):
-            return value
+            normalized = [normalize_origin(item) for item in value]
+            cleaned = [item for item in normalized if item]
+            return cleaned or ["*"]
         if isinstance(value, str):
             raw = value.strip()
             if not raw:
@@ -98,12 +108,15 @@ class Settings(BaseSettings):
                 try:
                     parsed = json.loads(raw)
                     if isinstance(parsed, list):
-                        return [str(item).strip() for item in parsed if str(item).strip()]
+                        normalized = [normalize_origin(item) for item in parsed]
+                        cleaned = [item for item in normalized if item]
+                        return cleaned or ["*"]
                 except json.JSONDecodeError:
                     pass
 
             # Fallback: comma-separated or single origin.
-            parts = [part.strip() for part in raw.split(",") if part.strip()]
+            parts = [normalize_origin(part) for part in raw.split(",")]
+            parts = [part for part in parts if part]
             if parts:
                 return parts
 

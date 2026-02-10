@@ -47,8 +47,19 @@ class DatabaseService:
     # User operations
     async def get_user_profile(self, user_id: str) -> Optional[dict]:
         """Get user profile by ID."""
-        response = self.client.table("users").select("*").eq("id", user_id).single().execute()
-        return response.data if response.data else None
+        try:
+            response = (
+                self.client.table("users")
+                .select("*")
+                .eq("id", user_id)
+                .limit(1)
+                .execute()
+            )
+            rows = response.data or []
+            return rows[0] if rows else None
+        except Exception as exc:
+            logger.warning(f"Failed to fetch user profile {user_id}: {exc}")
+            return None
     
     async def update_user_profile(self, user_id: str, data: dict) -> dict:
         """Update user profile."""
@@ -475,8 +486,19 @@ class DatabaseService:
     
     async def get_session(self, session_id: str) -> Optional[dict]:
         """Get session by ID."""
-        response = self.client.table("sessions").select("*").eq("id", session_id).single().execute()
-        return response.data if response.data else None
+        try:
+            response = (
+                self.client.table("sessions")
+                .select("*")
+                .eq("id", session_id)
+                .limit(1)
+                .execute()
+            )
+            rows = response.data or []
+            return rows[0] if rows else None
+        except Exception as exc:
+            logger.warning(f"Failed to fetch session {session_id}: {exc}")
+            return None
     
     async def get_user_sessions(self, user_id: str, limit: int = 20) -> list:
         """Get user's recent sessions."""
@@ -512,25 +534,130 @@ class DatabaseService:
     async def save_detected_error(self, session_id: str, error: dict) -> dict:
         """Save a detected error."""
         error["session_id"] = session_id
-        response = self.client.table("detected_errors").insert(error).execute()
-        return response.data[0] if response.data else None
+        try:
+            response = self.client.table("detected_errors").insert(error).execute()
+            return response.data[0] if response.data else None
+        except Exception:
+            try:
+                payload = self._to_error_instance_payload(session_id, error)
+                response = self.client.table("error_instances").insert(payload).execute()
+                rows = response.data or []
+                return self._normalize_error_row(rows[0]) if rows else None
+            except Exception as exc:
+                logger.warning(f"Failed to save error for session {session_id}: {exc}")
+                return None
     
     async def save_detected_errors(self, session_id: str, errors: list) -> list:
         """Save multiple detected errors."""
         for error in errors:
             error["session_id"] = session_id
-        response = self.client.table("detected_errors").insert(errors).execute()
-        return response.data or []
+        try:
+            response = self.client.table("detected_errors").insert(errors).execute()
+            return response.data or []
+        except Exception:
+            try:
+                payload = [self._to_error_instance_payload(session_id, err) for err in errors]
+                response = self.client.table("error_instances").insert(payload).execute()
+                rows = response.data or []
+                return [self._normalize_error_row(row) for row in rows]
+            except Exception as exc:
+                logger.warning(f"Failed to save bulk errors for session {session_id}: {exc}")
+                return []
     
     async def get_session_errors(self, session_id: str) -> list:
         """Get all errors for a session."""
-        response = (
-            self.client.table("detected_errors")
-            .select("*")
-            .eq("session_id", session_id)
-            .execute()
-        )
-        return response.data or []
+        # Legacy table first for backwards-compatible shape.
+        try:
+            response = (
+                self.client.table("detected_errors")
+                .select("*")
+                .eq("session_id", session_id)
+                .execute()
+            )
+            rows = response.data or []
+            if rows:
+                return rows
+        except Exception:
+            pass
+
+        # Production schema fallback.
+        try:
+            response = (
+                self.client.table("error_instances")
+                .select("*")
+                .eq("session_id", session_id)
+                .order("created_at")
+                .execute()
+            )
+            rows = response.data or []
+            return [self._normalize_error_row(row) for row in rows]
+        except Exception as exc:
+            logger.warning(f"Failed to fetch errors for session {session_id}: {exc}")
+            return []
+
+    def _to_error_instance_payload(self, session_id: str, error: dict) -> dict:
+        """Normalize legacy error payload for insertion into error_instances."""
+        category = str(error.get("category") or "grammar").lower()
+        if category not in {"pronunciation", "grammar", "vocabulary", "fluency"}:
+            category = "grammar"
+
+        severity = str(error.get("severity") or "moderate").lower()
+        if severity not in {"minor", "moderate", "major", "critical"}:
+            severity = "moderate"
+
+        confidence = error.get("confidence", 0.8)
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
+            confidence = 0.8
+        confidence = max(0.0, min(1.0, confidence))
+
+        timestamp_ms = error.get("timestamp_ms")
+        try:
+            timestamp_ms = int(timestamp_ms) if timestamp_ms is not None else None
+        except (TypeError, ValueError):
+            timestamp_ms = None
+
+        return {
+            "session_id": session_id,
+            "category": category,
+            "subcategory": str(error.get("subcategory") or "general"),
+            "error_code": str(error.get("error_code") or "GENERAL_ERROR"),
+            "severity": severity,
+            "original_text": str(error.get("original_text") or ""),
+            "corrected_text": str(error.get("corrected_text") or ""),
+            "explanation": str(error.get("explanation") or ""),
+            "confidence": confidence,
+            "timestamp_ms": timestamp_ms,
+        }
+
+    def _normalize_error_row(self, row: dict) -> dict:
+        """Normalize error_instances row to legacy detected_errors shape."""
+        if not isinstance(row, dict):
+            return {}
+
+        if "original_text" in row and "corrected_text" in row and "subcategory" in row:
+            return row
+
+        evidence = row.get("evidence")
+        snippet = ""
+        if isinstance(evidence, dict):
+            snippet = str(evidence.get("snippet") or "")
+
+        return {
+            "id": row.get("id"),
+            "session_id": row.get("session_id"),
+            "category": row.get("category") or "grammar",
+            "subcategory": row.get("subcategory") or "general",
+            "error_code": row.get("error_code") or "GENERAL_ERROR",
+            "original_text": row.get("original_text") or snippet,
+            "corrected_text": row.get("corrected_text") or "",
+            "explanation": row.get("explanation") or "",
+            "confidence": row.get("confidence") if row.get("confidence") is not None else 0.8,
+            "severity": row.get("severity") or "moderate",
+            "timestamp_ms": row.get("timestamp_ms") if row.get("timestamp_ms") is not None else 0,
+            "created_at": row.get("created_at"),
+        }
     
     # Error profile operations
     async def get_user_error_profile(self, user_id: str) -> list:

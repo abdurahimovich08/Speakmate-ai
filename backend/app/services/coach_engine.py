@@ -106,6 +106,12 @@ def _safe_div(num: float, den: float) -> float:
     return num / den if den else 0.0
 
 
+def _dict_list(items: Any) -> list[dict]:
+    if not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, dict)]
+
+
 class CoachEngine:
     """High-level coaching intelligence used by Super Coach endpoints."""
 
@@ -116,11 +122,13 @@ class CoachEngine:
     ) -> dict:
         hours = []
         for session in sessions[:60]:
+            if not isinstance(session, dict):
+                continue
             dt = _parse_dt(session.get("created_at"))
             if dt:
                 hours.append(dt.hour)
 
-        for item in mission_history[-40:]:
+        for item in _dict_list(mission_history)[-40:]:
             completed_at = _parse_dt(item.get("completed_at"))
             if completed_at:
                 hours.append(completed_at.hour)
@@ -208,10 +216,11 @@ class CoachEngine:
         return drills
 
     def infer_difficulty(self, mission_history: list[dict]) -> MissionDifficulty:
-        if not mission_history:
+        history = _dict_list(mission_history)
+        if not history:
             return DIFFICULTY_PRESETS["balanced"]
 
-        latest = mission_history[-1]
+        latest = history[-1]
         success = _safe_float(latest.get("success_rate"), 0.75)
         if success >= 0.85:
             return DIFFICULTY_PRESETS["advanced"]
@@ -227,7 +236,7 @@ class CoachEngine:
         preferences: dict,
     ) -> dict:
         coach_state = preferences.get("coach", {}) if isinstance(preferences, dict) else {}
-        mission_history = coach_state.get("mission_history", [])
+        mission_history = _dict_list(coach_state.get("mission_history", []))
         difficulty = self.infer_difficulty(mission_history)
         best_window = self.estimate_best_practice_window(sessions, mission_history)
 
@@ -384,7 +393,8 @@ class CoachEngine:
 
         last_five = []
         for session in sessions[:5]:
-            scores = session.get("overall_scores") or {}
+            raw_scores = session.get("overall_scores")
+            scores = raw_scores if isinstance(raw_scores, dict) else {}
             last_five.append({
                 "session_id": session.get("id"),
                 "topic": session.get("topic") or "general",
@@ -606,7 +616,10 @@ class CoachEngine:
         insights = []
         now = _utcnow()
 
-        last_practice = _parse_dt(sessions[0].get("created_at")) if sessions else None
+        safe_sessions = [s for s in sessions if isinstance(s, dict)]
+        safe_history = _dict_list(mission_history)
+
+        last_practice = _parse_dt(safe_sessions[0].get("created_at")) if safe_sessions else None
         if not last_practice or (now - last_practice) > timedelta(days=3):
             insights.append({
                 "risk": "habit_drop",
@@ -621,8 +634,8 @@ class CoachEngine:
                 "action": "Show mini-wins after each mission (filler count, WPM, confidence).",
             })
 
-        if mission_history:
-            recent = mission_history[-7:]
+        if safe_history:
+            recent = safe_history[-7:]
             avg_success = _safe_div(
                 sum(_safe_float(i.get("success_rate"), 0.0) for i in recent),
                 len(recent),
@@ -654,7 +667,7 @@ class CoachEngine:
     ) -> dict:
         prefs = preferences if isinstance(preferences, dict) else {}
         coach = prefs.setdefault("coach", {})
-        history = coach.setdefault("mission_history", [])
+        history = _dict_list(coach.setdefault("mission_history", []))
 
         success_rate = round(_safe_div(tasks_completed, max(total_tasks, 1)), 2)
         history.append({

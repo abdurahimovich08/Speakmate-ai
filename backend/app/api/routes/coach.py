@@ -134,6 +134,12 @@ def _preferences(profile: dict) -> dict:
     return prefs if isinstance(prefs, dict) else {}
 
 
+def _normalize_mission_history(items: Any) -> list[dict]:
+    if not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, dict)]
+
+
 async def _save_preferences(user_id: str, preferences: dict) -> None:
     await db_service.update_user_profile(user_id, {"preferences": preferences})
 
@@ -229,7 +235,8 @@ async def _build_session_metrics(
         grammar_errors = len([e for e in session_errors if str(e.get("category")).lower() == "grammar"])
         grammar_accuracy = round(max(0.0, 100 - (grammar_errors / max(word_count, 1)) * 100), 2)
 
-        scores = session.get("overall_scores") or {}
+        raw_scores = session.get("overall_scores")
+        scores = raw_scores if isinstance(raw_scores, dict) else {}
         overall_band = scores.get("overall_band")
         if overall_band is None:
             overall_band = session.get("overall_score")
@@ -607,7 +614,7 @@ async def get_behavior_insights(
     profile = await _ensure_user_profile(current_user)
     preferences = _preferences(profile)
     coach_state = preferences.get("coach", {}) if isinstance(preferences, dict) else {}
-    mission_history = coach_state.get("mission_history", [])
+    mission_history = _normalize_mission_history(coach_state.get("mission_history", []))
 
     sessions = await db_service.get_user_sessions(current_user["user_id"], limit=100)
     sessions = _filter_sessions_by_days(sessions, days)
@@ -627,8 +634,14 @@ async def get_behavior_insights(
     completion_rate = None
     if mission_history:
         recent = mission_history[-14:]
+        recent_scores = []
+        for item in recent:
+            try:
+                recent_scores.append(float(item.get("success_rate", 0.0)))
+            except (TypeError, ValueError):
+                recent_scores.append(0.0)
         completion_rate = round(
-            sum(float(item.get("success_rate", 0.0)) for item in recent) / len(recent),
+            sum(recent_scores) / max(len(recent_scores), 1),
             2,
         )
 
