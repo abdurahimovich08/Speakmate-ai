@@ -14,6 +14,9 @@ from app.db.supabase import db_service
 from app.services.speech import SpeechService
 from app.services.conversation import ConversationService
 from app.services.analyzer import ErrorAnalyzer
+from app.services.hybrid_analyzer import HybridErrorAnalyzer
+from app.services.pronunciation_engine import PronunciationAnalyzer
+from app.services.ielts_scorer_production import ielts_scorer
 
 router = APIRouter()
 
@@ -30,7 +33,9 @@ class ConnectionManager:
         self.active_connections[session_id] = websocket
         self.session_data[session_id] = {
             "conversation_history": [],
+            "utterances": [],
             "errors": [],
+            "recommendations": [],
             "turn_count": 0,
             "start_time": datetime.utcnow()
         }
@@ -54,6 +59,85 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+def _extract_band(value) -> Optional[float]:
+    if isinstance(value, dict):
+        value = value.get("band")
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _flatten_advanced_scores(advanced_scores: dict) -> dict:
+    if not isinstance(advanced_scores, dict):
+        return {}
+
+    mapping = {
+        "fluency_coherence": "fluency_coherence",
+        "lexical_resource": "lexical_resource",
+        "grammatical_range": "grammatical_range",
+        "pronunciation": "pronunciation",
+    }
+
+    flat = {}
+    for source_key, target_key in mapping.items():
+        band = _extract_band(advanced_scores.get(source_key))
+        if band is not None:
+            flat[target_key] = round(band * 2) / 2
+
+    overall = _extract_band(advanced_scores.get("overall_band"))
+    if overall is not None:
+        flat["overall_band"] = round(overall * 2) / 2
+
+    if "overall_band" not in flat and all(k in flat for k in mapping.values()):
+        avg = sum(flat[k] for k in mapping.values()) / len(mapping)
+        flat["overall_band"] = round(avg * 2) / 2
+
+    return flat
+
+
+def _score_based_tips(scores: dict) -> list[str]:
+    def score_of(key: str, default: float = 9.0) -> float:
+        try:
+            return float(scores.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
+    tips = []
+    if not isinstance(scores, dict):
+        return tips
+
+    if score_of("grammatical_range") < 6.5:
+        tips.append("Grammar accuracyni oshirish uchun qisqa, toza gaplardan boshlab keyin murakkab strukturaga o'ting.")
+    if score_of("lexical_resource") < 6.5:
+        tips.append("Bir xil so'zlarni takrorlamaslik uchun har mavzuga 5-7 ta synonym/chunk tayyorlang.")
+    if score_of("fluency_coherence") < 6.5:
+        tips.append("Fluency uchun 60-90 soniyalik timed speaking mashqlarini har kuni bajaring.")
+    if score_of("pronunciation") < 6.5:
+        tips.append("Pronunciation uchun shadowing va minimal-pairs mashqlarini qo'shing.")
+
+    return tips
+
+
+def _merge_unique_texts(items: list[str], limit: int = 6) -> list[str]:
+    seen = set()
+    merged = []
+    for item in items:
+        if not item:
+            continue
+        text = str(item).strip()
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(text)
+        if len(merged) >= limit:
+            break
+    return merged
 
 
 @router.websocket("/ws/conversation/{session_id}")
@@ -92,6 +176,14 @@ async def conversation_websocket(
     if session.get("user_id") != current_user["user_id"]:
         await websocket.close(code=1008, reason="Not authorized for this session")
         return
+
+    try:
+        user_profile = await db_service.get_user_profile(current_user["user_id"])
+        if user_profile and user_profile.get("native_language"):
+            session["native_language"] = user_profile["native_language"]
+    except Exception:
+        # Non-blocking: fallback to default native language in analyzer.
+        pass
 
     await manager.connect(websocket, session_id)
     
@@ -171,7 +263,8 @@ async def conversation_websocket(
                                 transcription["text"],
                                 session,
                                 conversation_service,
-                                error_analyzer
+                                error_analyzer,
+                                transcription_meta=transcription,
                             )
             
             elif message_type == "text_input":
@@ -183,7 +276,7 @@ async def conversation_websocket(
                         text,
                         session,
                         conversation_service,
-                        error_analyzer
+                        error_analyzer,
                     )
             
             elif message_type == "end_session":
@@ -218,7 +311,8 @@ async def process_user_message(
     text: str,
     session: dict,
     conversation_service: ConversationService,
-    error_analyzer: ErrorAnalyzer
+    error_analyzer: ErrorAnalyzer,
+    transcription_meta: Optional[dict] = None,
 ):
     """Process user's message and generate response."""
     
@@ -229,6 +323,42 @@ async def process_user_message(
         "role": "user",
         "content": text
     })
+
+    # Capture utterance-level metadata for deep analysis and pronunciation scoring.
+    words = []
+    confidence = 0.0
+    audio_duration_ms = 0
+    if isinstance(transcription_meta, dict):
+        confidence = float(transcription_meta.get("confidence") or 0.0)
+        raw_words = transcription_meta.get("words") or []
+        if isinstance(raw_words, list):
+            for item in raw_words:
+                if not isinstance(item, dict):
+                    continue
+                word = str(item.get("word") or "").strip()
+                if not word:
+                    continue
+                start_ms = int(float(item.get("start_time") or 0) * 1000)
+                end_ms = int(float(item.get("end_time") or 0) * 1000)
+                words.append(
+                    {
+                        "word": word,
+                        "start_ms": start_ms,
+                        "end_ms": end_ms,
+                        "confidence": confidence,
+                    }
+                )
+            if words:
+                audio_duration_ms = max(0, words[-1]["end_ms"] - words[0]["start_ms"])
+
+    session_data.setdefault("utterances", []).append(
+        {
+            "text": text,
+            "word_timestamps": words,
+            "duration_ms": audio_duration_ms,
+            "sequence": session_data.get("turn_count", 0) + 1,
+        }
+    )
     
     # Analyze for errors (in background)
     errors = await error_analyzer.analyze_text(
@@ -273,6 +403,9 @@ async def process_user_message(
         "role": "user",
         "content": text,
         "transcription": text,
+        "transcription_confidence": confidence or None,
+        "word_timestamps": words if words else None,
+        "audio_duration_ms": audio_duration_ms or None,
         "sequence_order": session_data["turn_count"] * 2 - 1
     })
     
@@ -295,11 +428,74 @@ async def end_conversation(
     # Calculate duration
     start_time = session_data.get("start_time", datetime.utcnow())
     duration_seconds = (datetime.utcnow() - start_time).seconds
-    
-    # Save all errors to database
+
+    # Generate overall scores
+    full_transcription = " ".join([
+        turn["content"] for turn in session_data.get("conversation_history", [])
+        if turn.get("role") == "user"
+    ])
+
+    scores = await error_analyzer.generate_scores(
+        full_transcription,
+        session_data.get("errors", [])
+    )
+    recommendations: list[str] = []
+    pronunciation_result: dict = {}
+
+    # Run deeper end-of-session pass to avoid "scores only" experience.
+    try:
+        if len(full_transcription.split()) >= 8:
+            user_profile = await db_service.get_user_profile(session.get("user_id"))
+            native_language = (user_profile or {}).get("native_language", "uz")
+            utterances = session_data.get("utterances", [])
+
+            hybrid_analyzer = HybridErrorAnalyzer()
+            enhanced_errors = await hybrid_analyzer.full_analysis(
+                text=full_transcription,
+                utterances=utterances,
+                native_language=native_language,
+            )
+            if enhanced_errors:
+                session_data["errors"] = enhanced_errors
+
+            if utterances:
+                pronunciation_analyzer = PronunciationAnalyzer()
+                pronunciation_result = await pronunciation_analyzer.analyze(
+                    utterances=utterances,
+                    native_language=native_language,
+                )
+
+            advanced_scores = await ielts_scorer.score_with_evidence(
+                transcription=full_transcription,
+                errors=session_data.get("errors", []),
+                pronunciation_scores=pronunciation_result,
+                mode=session.get("mode", "free_speaking"),
+            )
+            flattened_scores = _flatten_advanced_scores(advanced_scores)
+            if flattened_scores:
+                flattened_scores["word_count"] = len(full_transcription.split())
+                flattened_scores["total_errors"] = len(session_data.get("errors", []))
+                scores = flattened_scores
+    except Exception:
+        # Keep session end resilient: basic score path must still succeed.
+        pass
+
+    recommendations = await error_analyzer.get_improvement_suggestions(
+        session_data.get("errors", []),
+        scores,
+    )
+    recommendations = _merge_unique_texts(
+        recommendations
+        + _score_based_tips(scores)
+        + (pronunciation_result.get("feedback", []) if isinstance(pronunciation_result, dict) else []),
+        limit=6,
+    )
+    session_data["recommendations"] = recommendations
+
+    # Save all errors to database (after enhanced pass)
     if session_data.get("errors"):
         await db_service.save_detected_errors(session_id, session_data["errors"])
-        
+
         # Update user's error profile
         user_id = session.get("user_id")
         for error in session_data["errors"]:
@@ -308,17 +504,6 @@ async def end_conversation(
                 error.get("category"),
                 error.get("subcategory", "general")
             )
-    
-    # Generate overall scores
-    full_transcription = " ".join([
-        turn["content"] for turn in session_data.get("conversation_history", [])
-        if turn.get("role") == "user"
-    ])
-    
-    scores = await error_analyzer.generate_scores(
-        full_transcription,
-        session_data.get("errors", [])
-    )
     
     # Update session with final data
     await db_service.update_session(session_id, {
@@ -336,6 +521,10 @@ async def end_conversation(
             "total_errors": len(session_data.get("errors", [])),
             "scores": scores,
             "errors": session_data.get("errors", []),
+            "recommendations": recommendations,
+            "analysis": {
+                "pronunciation": pronunciation_result,
+            },
             "message": "Session completed! Check your feedback."
         }
     })

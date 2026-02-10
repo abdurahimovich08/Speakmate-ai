@@ -38,8 +38,8 @@ export function useAudio() {
     useSessionStore.getState().setRecording(true)
   }, [socket, checkPermission])
 
-  const stopRecording = useCallback(() => {
-    recorderRef.current?.stop()
+  const stopRecording = useCallback(async () => {
+    await recorderRef.current?.stop()
     recorderRef.current = null
     setRecording(false)
     useSessionStore.getState().setRecording(false)
@@ -47,7 +47,7 @@ export function useAudio() {
 
   const toggleRecording = useCallback(async () => {
     if (recording) {
-      stopRecording()
+      await stopRecording()
     } else {
       await startRecording()
     }

@@ -6,10 +6,10 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTelegramBackButton } from '../hooks/useTelegram'
 import { useSessionStore } from '../stores/sessionStore'
-import { getSession, getSessionErrors, getConversation } from '../services/api'
+import { getSession, getSessionErrors, getConversation, getSessionFeedback } from '../services/api'
 import ScoreCard from '../components/ScoreCard'
 import ErrorList from '../components/ErrorList'
-import type { Session, DetectedError, ConversationTurn, IELTSScores } from '../types'
+import type { Session, DetectedError, ConversationTurn, IELTSScores, SessionFeedback } from '../types'
 
 export default function Results() {
   const { id } = useParams<{ id: string }>()
@@ -19,6 +19,7 @@ export default function Results() {
   // Try to get data from store first (just-finished session)
   const storeScores = useSessionStore((s) => s.scores)
   const storeErrors = useSessionStore((s) => s.errors)
+  const storeRecommendations = useSessionStore((s) => s.recommendations)
   const storeSession = useSessionStore((s) => s.session)
 
   const [session, setSession] = useState<Session | null>(
@@ -30,6 +31,10 @@ export default function Results() {
   const [errors, setErrors] = useState<DetectedError[]>(
     storeSession?.id === id ? storeErrors : [],
   )
+  const [recommendations, setRecommendations] = useState<string[]>(
+    storeSession?.id === id ? storeRecommendations : [],
+  )
+  const [summary, setSummary] = useState<string>('')
   const [conversation, setConversation] = useState<ConversationTurn[]>([])
   const [tab, setTab] = useState<'scores' | 'errors' | 'chat'>('scores')
   const [loading, setLoading] = useState(!session)
@@ -43,12 +48,21 @@ export default function Results() {
       getSession(id),
       getSessionErrors(id),
       getConversation(id),
+      getSessionFeedback(id).catch(() => null as SessionFeedback | null),
     ])
-      .then(([s, e, c]) => {
+      .then(([s, e, c, feedback]) => {
         setSession(s)
         setScores(s.overall_scores || null)
         setErrors(e)
         setConversation(c)
+        if (feedback) {
+          if (Array.isArray(feedback.recommendations)) {
+            setRecommendations(feedback.recommendations)
+          }
+          if (typeof feedback.summary === 'string') {
+            setSummary(feedback.summary)
+          }
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false))
@@ -94,6 +108,21 @@ export default function Results() {
       {tab === 'scores' && scores && <ScoreCard scores={scores} />}
 
       {tab === 'errors' && <ErrorList errors={errors} />}
+
+      {tab === 'scores' && recommendations.length > 0 && (
+        <div className="mt-4 bg-tg-section rounded-xl p-4">
+          <h2 className="font-semibold mb-2">Tavsiyalar</h2>
+          <ul className="space-y-2 text-sm text-tg-text">
+            {recommendations.map((tip, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-tg-link">•</span>
+                <span>{tip}</span>
+              </li>
+            ))}
+          </ul>
+          {summary && <p className="text-xs text-tg-hint mt-3">{summary}</p>}
+        </div>
+      )}
 
       {tab === 'chat' && (
         <div className="space-y-2">

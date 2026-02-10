@@ -89,7 +89,19 @@ export interface WSSessionEnded {
   total_errors: number
   scores: IELTSScores
   errors: DetectedError[]
+  recommendations?: string[]
+  analysis?: Record<string, unknown>
   message: string
+}
+
+export interface SessionFeedback {
+  session_id: string
+  overall_band?: number
+  scores: IELTSScores
+  errors: DetectedError[]
+  summary?: string
+  recommendations?: string[]
+  strengths?: string[]
 }
 
 // ---- Telegram ----

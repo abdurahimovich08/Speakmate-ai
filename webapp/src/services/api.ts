@@ -2,7 +2,7 @@
    REST API Service
    =========================== */
 
-import type { Session, UserProfile, ConversationTurn, DetectedError } from '../types'
+import type { Session, UserProfile, ConversationTurn, DetectedError, SessionFeedback } from '../types'
 import { useAuthStore } from '../stores/authStore'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -76,7 +76,7 @@ export async function getSessionErrors(sessionId: string) {
 
 // ---- Feedback ----
 export async function getSessionFeedback(sessionId: string) {
-  return request<Record<string, unknown>>(`/api/v1/feedback/${sessionId}`)
+  return request<SessionFeedback>(`/api/v1/feedback/${sessionId}`)
 }
 
 // ---- Super Coach ----

@@ -53,7 +53,9 @@ export default function Session() {
   }, [])
 
   const handleEnd = useCallback(async () => {
-    stopRecording()
+    await stopRecording()
+    // Give the browser/websocket loop a moment to flush final audio chunk.
+    await new Promise((resolve) => setTimeout(resolve, 300))
     telegramService.hapticNotification('success')
     await endSession()
   }, [endSession, stopRecording])

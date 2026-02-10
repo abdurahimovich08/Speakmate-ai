@@ -11,6 +11,7 @@ export class AudioRecorder {
   private chunks: Blob[] = []
   private onData: AudioDataCallback
   private timeslice: number
+  private stopResolver: (() => void) | null = null
 
   /**
    * @param onData  Called with base64 audio data every timeslice ms
@@ -57,20 +58,31 @@ export class AudioRecorder {
         this.onData(base64, true)
         this.chunks = []
       }
+      if (this.stopResolver) {
+        this.stopResolver()
+        this.stopResolver = null
+      }
     }
 
     this.mediaRecorder.start(this.timeslice)
   }
 
   /** Stop recording and release the microphone */
-  stop() {
-    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      this.mediaRecorder.stop()
-    }
-    if (this.stream) {
-      this.stream.getTracks().forEach((t) => t.stop())
-      this.stream = null
-    }
+  stop(): Promise<void> {
+    return new Promise((resolve) => {
+      const recorder = this.mediaRecorder
+      if (recorder && recorder.state !== 'inactive') {
+        this.stopResolver = resolve
+        recorder.stop()
+      } else {
+        resolve()
+      }
+
+      if (this.stream) {
+        this.stream.getTracks().forEach((t) => t.stop())
+        this.stream = null
+      }
+    })
   }
 
   get isRecording(): boolean {

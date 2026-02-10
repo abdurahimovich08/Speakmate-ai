@@ -29,6 +29,7 @@ interface SessionState {
   // Results
   scores: IELTSScores | null
   errors: DetectedError[]
+  recommendations: string[]
 
   // History
   sessions: Session[]
@@ -54,13 +55,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   isEnding: false,
   scores: null,
   errors: [],
+  recommendations: [],
   sessions: [],
   loadingSessions: false,
 
   startSession: async (mode, topic) => {
     // 1. Create session via REST
     const session = await api.createSession(mode, topic)
-    set({ session, messages: [], scores: null, errors: [], isEnding: false })
+    set({ session, messages: [], scores: null, errors: [], recommendations: [], isEnding: false })
 
     // 2. Connect WebSocket
     const socket = new ConversationSocket(session.id)
@@ -88,6 +90,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       set({
         scores: data.scores,
         errors: data.errors,
+        recommendations: data.recommendations || [],
         isConnected: false,
         isEnding: false,
       })
@@ -139,6 +142,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       isEnding: false,
       scores: null,
       errors: [],
+      recommendations: [],
     })
   },
 }))

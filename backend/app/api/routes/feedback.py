@@ -11,8 +11,53 @@ from app.core.security import get_current_user
 from app.db.supabase import db_service
 from app.models.schemas import SessionFeedback, PDFReportRequest, PDFReportResponse
 from app.services.pdf import PDFGenerator
+from app.services.analyzer import ErrorAnalyzer
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
+
+
+def _score_summary(scores: dict, total_errors: int) -> str:
+    if not isinstance(scores, dict):
+        return "Session completed."
+
+    overall = scores.get("overall_band")
+    try:
+        overall_band = float(overall)
+    except (TypeError, ValueError):
+        overall_band = None
+
+    if overall_band is None:
+        return f"Session completed with {total_errors} detected errors."
+    if overall_band >= 7.0:
+        level = "Strong performance."
+    elif overall_band >= 6.0:
+        level = "Good progress."
+    elif overall_band >= 5.0:
+        level = "Developing performance."
+    else:
+        level = "Foundation needs strengthening."
+    return f"{level} Estimated overall band: {overall_band:.1f}. Errors detected: {total_errors}."
+
+
+def _score_strengths(scores: dict) -> list[str]:
+    if not isinstance(scores, dict):
+        return []
+    strengths = []
+    mapping = {
+        "fluency_coherence": "Fluency and coherence is improving.",
+        "lexical_resource": "Vocabulary range is getting stronger.",
+        "grammatical_range": "Grammar control is relatively stable.",
+        "pronunciation": "Pronunciation clarity is a strong point.",
+    }
+    for key, message in mapping.items():
+        try:
+            if float(scores.get(key, 0)) >= 6.5:
+                strengths.append(message)
+        except (TypeError, ValueError):
+            continue
+    if not strengths:
+        strengths.append("You are building consistency through practice.")
+    return strengths[:3]
 
 
 @router.get("/{session_id}", response_model=dict)
@@ -39,6 +84,12 @@ async def get_session_feedback(
     # Get all related data
     errors = await db_service.get_session_errors(str(session_id))
     conversation = await db_service.get_conversation_turns(str(session_id))
+    scores = session.get("overall_scores") if isinstance(session.get("overall_scores"), dict) else {}
+
+    analyzer = ErrorAnalyzer()
+    recommendations = await analyzer.get_improvement_suggestions(errors, scores)
+    strengths = _score_strengths(scores)
+    summary = _score_summary(scores, len(errors))
     
     # Group errors by category
     error_summary = {}
@@ -53,11 +104,16 @@ async def get_session_feedback(
         "mode": session.get("mode"),
         "topic": session.get("topic"),
         "duration_seconds": session.get("duration_seconds"),
-        "overall_scores": session.get("overall_scores"),
+        "overall_scores": scores,
+        "overall_band": scores.get("overall_band"),
+        "scores": scores,
         "total_errors": len(errors),
         "errors_by_category": error_summary,
         "conversation_turns": len(conversation),
-        "errors": errors
+        "errors": errors,
+        "summary": summary,
+        "recommendations": recommendations,
+        "strengths": strengths,
     }
 
 
