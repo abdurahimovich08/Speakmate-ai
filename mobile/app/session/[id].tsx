@@ -43,6 +43,10 @@ export default function SessionScreen() {
   const [sessionDuration, setSessionDuration] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const typingDot1 = useRef(new Animated.Value(0.3)).current;
+  const typingDot2 = useRef(new Animated.Value(0.3)).current;
+  const typingDot3 = useRef(new Animated.Value(0.3)).current;
+  const typingLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
   // Session timer
   useEffect(() => {
@@ -76,6 +80,51 @@ export default function SessionScreen() {
       pulseAnim.setValue(1);
     }
   }, [isRecording]);
+
+  // AI typing indicator animation (React Native doesn't support CSS animationDelay)
+  useEffect(() => {
+    if (!isAiTyping) {
+      typingLoopRef.current?.stop();
+      typingLoopRef.current = null;
+      typingDot1.setValue(0.3);
+      typingDot2.setValue(0.3);
+      typingDot3.setValue(0.3);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(typingDot1, { toValue: 1, duration: 220, useNativeDriver: true }),
+          Animated.timing(typingDot2, { toValue: 0.3, duration: 220, useNativeDriver: true }),
+          Animated.timing(typingDot3, { toValue: 0.3, duration: 220, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(typingDot1, { toValue: 0.3, duration: 220, useNativeDriver: true }),
+          Animated.timing(typingDot2, { toValue: 1, duration: 220, useNativeDriver: true }),
+          Animated.timing(typingDot3, { toValue: 0.3, duration: 220, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(typingDot1, { toValue: 0.3, duration: 220, useNativeDriver: true }),
+          Animated.timing(typingDot2, { toValue: 0.3, duration: 220, useNativeDriver: true }),
+          Animated.timing(typingDot3, { toValue: 1, duration: 220, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(typingDot1, { toValue: 0.3, duration: 220, useNativeDriver: true }),
+          Animated.timing(typingDot2, { toValue: 0.3, duration: 220, useNativeDriver: true }),
+          Animated.timing(typingDot3, { toValue: 0.3, duration: 220, useNativeDriver: true }),
+        ]),
+      ])
+    );
+
+    typingLoopRef.current = loop;
+    loop.start();
+
+    return () => {
+      loop.stop();
+      typingLoopRef.current = null;
+    };
+  }, [isAiTyping]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -218,9 +267,9 @@ export default function SessionScreen() {
         {isAiTyping && (
           <View style={[styles.messageBubble, styles.aiMessage]}>
             <View style={styles.typingIndicator}>
-              <View style={styles.typingDot} />
-              <View style={[styles.typingDot, { animationDelay: '0.2s' }]} />
-              <View style={[styles.typingDot, { animationDelay: '0.4s' }]} />
+              <Animated.View style={[styles.typingDot, { opacity: typingDot1 }]} />
+              <Animated.View style={[styles.typingDot, { opacity: typingDot2 }]} />
+              <Animated.View style={[styles.typingDot, { opacity: typingDot3 }]} />
             </View>
           </View>
         )}
