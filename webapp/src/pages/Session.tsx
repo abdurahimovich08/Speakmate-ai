@@ -109,6 +109,12 @@ export default function Session() {
     return 60
   }, [session?.mode, session?.topic])
 
+  const autoFinishAfterTake = useMemo(() => {
+    // Product choice: make the loop dead-simple for Telegram users:
+    // record once -> analyze. Training can stay multi-turn.
+    return session?.mode === 'free_speaking' || session?.mode === 'ielts_test'
+  }, [session?.mode])
+
   useEffect(() => {
     if (scores && session) {
       navigate(`/results/${session.id}`, { replace: true })
@@ -153,9 +159,15 @@ export default function Session() {
 
     // Auto-stop at max duration.
     stopRecording()
-      .then(() => telegramService.hapticNotification('success'))
+      .then(async () => {
+        telegramService.hapticNotification('success')
+        if (autoFinishAfterTake && !isEnding) {
+          await new Promise((r) => setTimeout(r, 250))
+          await endSession()
+        }
+      })
       .catch((err) => console.error(err))
-  }, [recording, recordSeconds, maxSpeakSeconds, stopRecording])
+  }, [recording, recordSeconds, maxSpeakSeconds, stopRecording, autoFinishAfterTake, isEnding, endSession])
 
   const handleEnd = useCallback(async () => {
     await stopRecording()
@@ -172,6 +184,10 @@ export default function Session() {
       if (recording) {
         telegramService.hapticImpact('light')
         await stopRecording()
+        if (autoFinishAfterTake) {
+          await new Promise((r) => setTimeout(r, 250))
+          await endSession()
+        }
       } else {
         telegramService.hapticImpact('heavy')
         await startRecording()
@@ -180,7 +196,7 @@ export default function Session() {
       console.error(err)
       telegramService.hapticNotification('error')
     }
-  }, [isSupported, isEnding, isConnected, recording, startRecording, stopRecording])
+  }, [isSupported, isEnding, isConnected, recording, startRecording, stopRecording, autoFinishAfterTake, endSession])
 
   if (!session) {
     return (
@@ -296,7 +312,9 @@ export default function Session() {
               <div className="text-left">
                 <p className="text-sm font-semibold tracking-tight">{micLabel}</p>
                 <p className={`text-[11px] mt-0.5 ${recording ? 'opacity-90' : 'text-sm-muted'}`}>
-                  Max {maxSpeakSeconds}s per take. Stop early if you want.
+                  {autoFinishAfterTake
+                    ? `Auto-finish + analysis after this take. Max ${maxSpeakSeconds}s.`
+                    : `Max ${maxSpeakSeconds}s per take. Stop early if you want.`}
                 </p>
               </div>
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 border border-white/20">
