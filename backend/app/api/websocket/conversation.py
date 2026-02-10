@@ -234,15 +234,25 @@ async def conversation_websocket(
                 # Process audio chunk
                 audio_data = payload.get("audio_data")
                 is_final = payload.get("is_final", False)
+                mime_type = payload.get("mime_type")
+                encoding_hint = payload.get("encoding")
                 
                 if audio_data:
                     # Decode base64 audio
                     audio_bytes = base64.b64decode(audio_data)
+
+                    if not encoding_hint and isinstance(mime_type, str):
+                        lowered = mime_type.lower()
+                        if "ogg" in lowered:
+                            encoding_hint = "ogg_opus"
+                        elif "webm" in lowered:
+                            encoding_hint = "webm_opus"
                     
                     # Transcribe audio
                     transcription = await speech_service.transcribe_audio(
                         audio_bytes,
-                        is_final=is_final
+                        is_final=is_final,
+                        encoding=encoding_hint,
                     )
                     
                     if transcription and transcription.get("text"):

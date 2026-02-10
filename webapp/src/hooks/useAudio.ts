@@ -28,9 +28,9 @@ export function useAudio() {
     const ok = await checkPermission()
     if (!ok) return
 
-    const recorder = new AudioRecorder((base64, isFinal) => {
-      socket.sendAudioChunk(base64, isFinal)
-    }, 3000)
+    const recorder = new AudioRecorder((base64, isFinal, mimeType) => {
+      socket.sendAudioChunk(base64, isFinal, mimeType)
+    }, 0)
 
     await recorder.start()
     recorderRef.current = recorder

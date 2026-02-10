@@ -59,10 +59,11 @@ export class ConversationSocket {
   }
 
   /** Send base64-encoded audio chunk */
-  sendAudioChunk(audioBase64: string, isFinal = false) {
+  sendAudioChunk(audioBase64: string, isFinal = false, mimeType?: string) {
     this.send('audio_chunk', {
       audio_data: audioBase64,
       is_final: isFinal,
+      mime_type: mimeType,
     })
   }
 

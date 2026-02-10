@@ -3,7 +3,7 @@
    Uses MediaRecorder API for capturing audio from microphone.
    =========================== */
 
-type AudioDataCallback = (base64: string, isFinal: boolean) => void
+type AudioDataCallback = (base64: string, isFinal: boolean, mimeType?: string) => void
 
 export class AudioRecorder {
   private mediaRecorder: MediaRecorder | null = null
@@ -15,9 +15,9 @@ export class AudioRecorder {
 
   /**
    * @param onData  Called with base64 audio data every timeslice ms
-   * @param timeslice  How often to emit chunks (ms). Default 3000.
+   * @param timeslice  How often to emit chunks (ms). Use 0 to emit only once on stop.
    */
-  constructor(onData: AudioDataCallback, timeslice = 3000) {
+  constructor(onData: AudioDataCallback, timeslice = 0) {
     this.onData = onData
     this.timeslice = timeslice
   }
@@ -45,8 +45,12 @@ export class AudioRecorder {
     this.mediaRecorder.ondataavailable = async (event) => {
       if (event.data.size > 0) {
         this.chunks.push(event.data)
-        const base64 = await this.blobToBase64(event.data)
-        this.onData(base64, false)
+        // Streaming partial WebM chunks is unreliable across browsers/servers (often missing headers),
+        // so by default we only send one final blob on stop.
+        if (this.timeslice > 0) {
+          const base64 = await this.blobToBase64(event.data)
+          this.onData(base64, false, this.mediaRecorder?.mimeType)
+        }
       }
     }
 
@@ -55,7 +59,7 @@ export class AudioRecorder {
       if (this.chunks.length > 0) {
         const blob = new Blob(this.chunks, { type: this.mediaRecorder?.mimeType })
         const base64 = await this.blobToBase64(blob)
-        this.onData(base64, true)
+        this.onData(base64, true, this.mediaRecorder?.mimeType)
         this.chunks = []
       }
       if (this.stopResolver) {
@@ -64,7 +68,11 @@ export class AudioRecorder {
       }
     }
 
-    this.mediaRecorder.start(this.timeslice)
+    if (this.timeslice > 0) {
+      this.mediaRecorder.start(this.timeslice)
+    } else {
+      this.mediaRecorder.start()
+    }
   }
 
   /** Stop recording and release the microphone */

@@ -110,6 +110,9 @@ def create_internal_jwt(user_id: str, telegram_id: int, extra: dict | None = Non
 
     payload = {
         "sub": user_id,
+        # FastAPI auth layer verifies audience="authenticated" (Supabase-compatible).
+        # Without this, tokens issued for Telegram users fail verification (401/403).
+        "aud": "authenticated",
         "telegram_id": telegram_id,
         "role": "authenticated",
         "iss": "speakmate-telegram",

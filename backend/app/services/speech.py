@@ -106,24 +106,56 @@ class SpeechService:
             response = self.speech_client.recognize(config=config, audio=audio)
             
             if response.results:
-                result = response.results[0]
-                alternative = result.alternatives[0]
-                
+                transcripts: list[str] = []
+                confidences: list[float] = []
+                words: list[dict] = []
+                alternatives: list[str] = []
+
+                # Google STT can return multiple results for a single recognize() call.
+                # We must join them; otherwise the transcript appears "cut off" after the first phrase.
+                for idx, result in enumerate(response.results):
+                    if not getattr(result, "alternatives", None):
+                        continue
+
+                    alt0 = result.alternatives[0]
+                    text = (alt0.transcript or "").strip()
+                    if text:
+                        transcripts.append(text)
+
+                    try:
+                        conf = float(getattr(alt0, "confidence", 0.0) or 0.0)
+                        if conf > 0:
+                            confidences.append(conf)
+                    except (TypeError, ValueError):
+                        pass
+
+                    if idx == 0:
+                        alternatives = [
+                            alt.transcript for alt in result.alternatives[1:4] if getattr(alt, "transcript", None)
+                        ]
+
+                    for word in getattr(alt0, "words", []) or []:
+                        try:
+                            words.append(
+                                {
+                                    "word": word.word,
+                                    "start_time": word.start_time.total_seconds(),
+                                    "end_time": word.end_time.total_seconds(),
+                                }
+                            )
+                        except Exception:
+                            # Keep transcription resilient even if timing fields are missing.
+                            continue
+
+                joined = " ".join(transcripts).strip()
+                avg_confidence = round(sum(confidences) / len(confidences), 3) if confidences else 0.0
+
                 return {
-                    "text": alternative.transcript,
-                    "is_final": result.is_final if hasattr(result, 'is_final') else is_final,
-                    "confidence": alternative.confidence,
-                    "alternatives": [
-                        alt.transcript for alt in result.alternatives[1:4]
-                    ],
-                    "words": [
-                        {
-                            "word": word.word,
-                            "start_time": word.start_time.total_seconds(),
-                            "end_time": word.end_time.total_seconds()
-                        }
-                        for word in alternative.words
-                    ] if alternative.words else []
+                    "text": joined,
+                    "is_final": is_final,
+                    "confidence": avg_confidence,
+                    "alternatives": alternatives,
+                    "words": words,
                 }
             
             return {
