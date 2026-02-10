@@ -320,7 +320,7 @@ export default function Coach() {
             <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Fix fast</p>
             <h2 className="text-lg font-semibold tracking-tight mt-1">Mnemonic drills</h2>
             <p className="text-xs text-sm-muted mt-2 leading-relaxed">
-              Agar xato 3 marta takrorlansa, biz uni “memory hook” bilan mixlab, qayta-qayta eslatamiz.
+              Agar xato 3 marta takrorlansa, biz uni "memory hook" bilan mixlab, qayta-qayta eslatamiz.
             </p>
           </div>
         </div>
@@ -328,7 +328,7 @@ export default function Coach() {
         <div className="mt-4 space-y-3">
           {drills.length === 0 && (
             <SoftCard className="p-4">
-              <p className="text-sm text-sm-muted">Hali recurring error yo‘q. Gapiring, biz topamiz.</p>
+              <p className="text-sm text-sm-muted">Hali recurring error yo'q. Gapiring, biz topamiz.</p>
             </SoftCard>
           )}
 
@@ -440,7 +440,7 @@ export default function Coach() {
             <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Proof</p>
             <h2 className="text-lg font-semibold tracking-tight mt-1">Progress dashboard</h2>
             <p className="text-xs text-sm-muted mt-2 leading-relaxed">
-              Eng katta retention savol: “Men o‘tgan haftadan yaxshimanmi?” Bu yerda javob bor.
+              Eng katta retention savol: "Men o'tgan haftadan yaxshimanmi?" Bu yerda javob bor.
             </p>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
@@ -454,7 +454,7 @@ export default function Coach() {
                 <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Weekly vibe</p>
                 <p className="text-sm mt-2 leading-relaxed">
                   {proof.status === 'needs_more_data'
-                    ? 'Ko‘proq session kerak. 3-5 ta practice qiling, keyin trend aniq bo‘ladi.'
+                    ? "Ko'proq session kerak. 3-5 ta practice qiling, keyin trend aniq bo'ladi."
                     : 'Trend bor. Endi eng zaif 1 skillni 7 kun bosib ketamiz.'}
                 </p>
               </SoftCard>
@@ -626,7 +626,7 @@ export default function Coach() {
           <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Growth</p>
           <h2 className="text-lg font-semibold tracking-tight mt-1">Share card (preview)</h2>
           <p className="text-xs text-sm-muted mt-2 leading-relaxed">
-            Screenshot qilib ulashing. Har share card ichida bitta real tip bo‘lsin.
+            Screenshot qilib ulashing. Har share card ichida bitta real tip bo'lsin.
           </p>
 
           <SoftCard className="p-4 mt-4">
@@ -645,4 +645,3 @@ export default function Coach() {
     </div>
   )
 }
-

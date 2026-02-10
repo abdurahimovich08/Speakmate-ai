@@ -61,7 +61,7 @@ export default function History() {
           </p>
           <h1 className="text-2xl font-semibold font-display mt-1">History</h1>
           <p className="text-xs text-sm-muted mt-2">
-            Har sessiya bu rep. Natijani oching, xatolarni ko‘ring, keyingi qadamni bajaring.
+            Har sessiya bu rep. Natijani oching, xatolarni ko'ring, keyingi qadamni bajaring.
           </p>
         </div>
       </Card>
@@ -76,7 +76,7 @@ export default function History() {
 
       {!loadingSessions && sessions.length === 0 && (
         <SoftCard className="p-5 text-center">
-          <p className="text-sm font-medium tracking-tight">Hali sessiyalar yo‘q</p>
+          <p className="text-sm font-medium tracking-tight">Hali sessiyalar yo'q</p>
           <p className="text-xs text-sm-muted mt-2 leading-relaxed">
             10-15 minutlik birinchi practice qiling. Biz sizga xatolar, tavsiyalar va skill grafni chiqarib beramiz.
           </p>
@@ -156,4 +156,3 @@ export default function History() {
     </div>
   )
 }
-

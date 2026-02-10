@@ -116,7 +116,7 @@ export default function Profile() {
         <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Settings</p>
         <h2 className="text-lg font-semibold font-display mt-1">Coach setup</h2>
         <p className="text-xs text-sm-muted mt-2 leading-relaxed">
-          Bu sozlamalar Daily Mission va tavsiyalarni shaxsiylashtiradi. Maqsadni aniq qo‘ysangiz, coach yanada “premium” ishlaydi.
+          Bu sozlamalar Daily Mission va tavsiyalarni shaxsiylashtiradi. Maqsadni aniq qo'ysangiz, coach yanada premium ishlaydi.
         </p>
 
         <div className="mt-4 space-y-4">
