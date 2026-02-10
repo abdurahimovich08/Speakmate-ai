@@ -1,10 +1,10 @@
 /* ===========================
    Session - Energetic Coach "Call Mode"
-   - Hold to talk, release to send.
+   - Tap once to start recording, tap again to stop.
+   - Enforces per-mode max speaking time (Free Speaking = 60s, IELTS Part 2 = 120s).
    =========================== */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSessionStore } from '../stores/sessionStore'
 import { useAudio } from '../hooks/useAudio'
@@ -86,15 +86,28 @@ export default function Session() {
     recording,
     startRecording,
     stopRecording,
-    toggleRecording,
     isSupported,
     permissionGranted,
   } = useAudio()
 
-  const [pressed, setPressed] = useState(false)
+  const [recordSeconds, setRecordSeconds] = useState(0)
+  const recordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const stoppingRef = useRef(false)
   const feedRef = useRef<HTMLDivElement | null>(null)
 
   const visibleMessages = useMemo(() => messages.slice(-14), [messages])
+
+  const maxSpeakSeconds = useMemo(() => {
+    const mode = session?.mode
+    const topic = (session?.topic || '').toLowerCase()
+
+    if (mode === 'ielts_test') {
+      if (topic.includes('part 2')) return 120
+      return 60
+    }
+    if (mode === 'free_speaking') return 60
+    return 60
+  }, [session?.mode, session?.topic])
 
   useEffect(() => {
     if (scores && session) {
@@ -111,6 +124,39 @@ export default function Session() {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' })
   }, [visibleMessages.length, currentTranscription])
 
+  useEffect(() => {
+    if (!recording) {
+      if (recordIntervalRef.current) clearInterval(recordIntervalRef.current)
+      recordIntervalRef.current = null
+      setRecordSeconds(0)
+      stoppingRef.current = false
+      return
+    }
+
+    setRecordSeconds(0)
+    if (recordIntervalRef.current) clearInterval(recordIntervalRef.current)
+    recordIntervalRef.current = setInterval(() => {
+      setRecordSeconds((s) => s + 1)
+    }, 1000)
+
+    return () => {
+      if (recordIntervalRef.current) clearInterval(recordIntervalRef.current)
+      recordIntervalRef.current = null
+    }
+  }, [recording])
+
+  useEffect(() => {
+    if (!recording) return
+    if (recordSeconds < maxSpeakSeconds) return
+    if (stoppingRef.current) return
+    stoppingRef.current = true
+
+    // Auto-stop at max duration.
+    stopRecording()
+      .then(() => telegramService.hapticNotification('success'))
+      .catch((err) => console.error(err))
+  }, [recording, recordSeconds, maxSpeakSeconds, stopRecording])
+
   const handleEnd = useCallback(async () => {
     await stopRecording()
     await new Promise((resolve) => setTimeout(resolve, 250))
@@ -118,44 +164,23 @@ export default function Session() {
     await endSession()
   }, [endSession, stopRecording])
 
-  const handlePressStart = useCallback(
-    async (e: ReactPointerEvent<HTMLButtonElement>) => {
-      e.preventDefault()
-      if (!isSupported || isEnding) return
-      if (!isConnected) return
-      if (recording) return
+  const handleToggleMic = useCallback(async () => {
+    if (!isSupported || isEnding) return
+    if (!isConnected) return
 
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId)
-      } catch {
-        // ignore
-      }
-
-      setPressed(true)
-      telegramService.hapticImpact('heavy')
-      try {
+    try {
+      if (recording) {
+        telegramService.hapticImpact('light')
+        await stopRecording()
+      } else {
+        telegramService.hapticImpact('heavy')
         await startRecording()
-      } catch (err) {
-        console.error(err)
-        setPressed(false)
-        telegramService.hapticNotification('error')
       }
-    },
-    [isSupported, isEnding, isConnected, recording, startRecording],
-  )
-
-  const handlePressEnd = useCallback(
-    async (e: ReactPointerEvent<HTMLButtonElement>) => {
-      e.preventDefault()
-      if (!pressed) return
-      setPressed(false)
-      if (!recording) return
-      telegramService.hapticImpact('light')
-      await stopRecording()
-      await new Promise((resolve) => setTimeout(resolve, 150))
-    },
-    [pressed, recording, stopRecording],
-  )
+    } catch (err) {
+      console.error(err)
+      telegramService.hapticNotification('error')
+    }
+  }, [isSupported, isEnding, isConnected, recording, startRecording, stopRecording])
 
   if (!session) {
     return (
@@ -177,18 +202,22 @@ export default function Session() {
   const status = !isConnected
     ? { tone: 'offline' as const, title: 'Offline', subtitle: 'Reconnecting...' }
     : recording
-      ? { tone: 'listening' as const, title: 'Listening', subtitle: 'Hold to talk' }
+      ? { tone: 'listening' as const, title: 'Listening', subtitle: 'Tap to stop' }
       : isThinking
         ? { tone: 'thinking' as const, title: 'Coach thinking', subtitle: 'Scoring your speech' }
-        : { tone: 'ready' as const, title: 'Ready', subtitle: 'Hold mic to speak' }
+        : { tone: 'ready' as const, title: 'Ready', subtitle: 'Tap mic to start' }
+
+  const remaining = Math.max(0, maxSpeakSeconds - recordSeconds)
+  const mm = String(Math.floor(remaining / 60)).padStart(2, '0')
+  const ss = String(remaining % 60).padStart(2, '0')
 
   const micLabel = !isSupported
     ? 'Mic not supported'
     : permissionGranted === false
       ? 'Mic blocked'
-      : pressed || recording
-        ? 'Release to send'
-        : 'Hold to talk'
+      : recording
+        ? `Stop (${mm}:${ss})`
+        : 'Start recording'
 
   return (
     <div className="flex flex-col h-screen font-ui bg-sm-bg text-sm-text">
@@ -251,51 +280,40 @@ export default function Session() {
 
       <div className="px-4 pb-4">
         <div className="sm-card p-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                telegramService.hapticImpact('medium')
-                toggleRecording()
-              }}
-              className="sm-btn bg-sm-card2 text-sm-text border border-sm-border"
-              disabled={isEnding || !isSupported}
-              title="Tap to toggle (desktop fallback)"
-            >
-              Toggle
-            </button>
-
-            <button
-              className={`relative flex-1 rounded-2xl px-5 py-4 border border-sm-border transition-transform active:scale-[0.98] ${
-                pressed || recording ? 'text-white' : 'text-sm-text'
-              }`}
-              style={{
-                background:
-                  pressed || recording
-                    ? 'linear-gradient(90deg, var(--sm-accent), var(--sm-energy-2), var(--sm-energy))'
-                    : 'var(--sm-card-2)',
-              }}
-              disabled={isEnding || !isSupported}
-              onPointerDown={handlePressStart}
-              onPointerUp={handlePressEnd}
-              onPointerCancel={handlePressEnd}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-left">
-                  <p className="text-sm font-semibold tracking-tight">{micLabel}</p>
-                  <p className={`text-[11px] mt-0.5 ${pressed || recording ? 'opacity-90' : 'text-sm-muted'}`}>
-                    Speak 10-90 seconds. Short answers = weak scoring.
-                  </p>
-                </div>
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 border border-white/20">
-                  <MicGlyph />
-                </span>
+          <button
+            className={`relative w-full rounded-2xl px-5 py-4 border border-sm-border transition-transform active:scale-[0.98] ${
+              recording ? 'text-white' : 'text-sm-text'
+            }`}
+            style={{
+              background: recording
+                ? 'linear-gradient(90deg, var(--sm-accent), var(--sm-energy-2), var(--sm-energy))'
+                : 'var(--sm-card-2)',
+            }}
+            disabled={isEnding || !isSupported || !isConnected}
+            onClick={handleToggleMic}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-left">
+                <p className="text-sm font-semibold tracking-tight">{micLabel}</p>
+                <p className={`text-[11px] mt-0.5 ${recording ? 'opacity-90' : 'text-sm-muted'}`}>
+                  Max {maxSpeakSeconds}s per take. Stop early if you want.
+                </p>
               </div>
-            </button>
-          </div>
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 border border-white/20">
+                <MicGlyph />
+              </span>
+            </div>
+          </button>
 
           {!isSupported && (
             <p className="text-xs text-sm-danger mt-3">
               Your browser does not support microphone recording.
+            </p>
+          )}
+
+          {isSupported && !isConnected && (
+            <p className="text-xs text-sm-danger mt-3">
+              WebSocket offline. Wait for reconnect, then try again.
             </p>
           )}
         </div>

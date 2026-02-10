@@ -101,11 +101,8 @@ class SpeechService:
         
         audio = speech.RecognitionAudio(content=audio_data)
         
-        try:
-            # Perform synchronous recognition for short audio
-            response = self.speech_client.recognize(config=config, audio=audio)
-            
-            if response.results:
+        def _join_response(response_obj) -> dict:
+            if response_obj.results:
                 transcripts: list[str] = []
                 confidences: list[float] = []
                 words: list[dict] = []
@@ -113,7 +110,7 @@ class SpeechService:
 
                 # Google STT can return multiple results for a single recognize() call.
                 # We must join them; otherwise the transcript appears "cut off" after the first phrase.
-                for idx, result in enumerate(response.results):
+                for idx, result in enumerate(response_obj.results):
                     if not getattr(result, "alternatives", None):
                         continue
 
@@ -157,15 +154,43 @@ class SpeechService:
                     "alternatives": alternatives,
                     "words": words,
                 }
-            
+
             return {
                 "text": "",
                 "is_final": is_final,
                 "confidence": 0,
-                "alternatives": []
+                "alternatives": [],
             }
+
+        async def _recognize_sync():
+            return await asyncio.to_thread(self.speech_client.recognize, config=config, audio=audio)
+
+        async def _recognize_long():
+            operation = await asyncio.to_thread(
+                self.speech_client.long_running_recognize,
+                config=config,
+                audio=audio,
+            )
+            # Long-running recognize can take time for 60s+ audio. Keep a sensible timeout.
+            return await asyncio.to_thread(operation.result, timeout=180)
+
+        try:
+            # Use synchronous recognize first (fast path). If payload is large, prefer long-running.
+            # Size check is a pragmatic heuristic for Opus containers (prevents timeouts/limits).
+            response = await (_recognize_long() if len(audio_data) > 900_000 else _recognize_sync())
+
+            return _join_response(response)
             
         except Exception as e:
+            # Fallback for long audio when sync recognize hits service limits.
+            err = str(e).lower()
+            try:
+                if any(k in err for k in ["maximum", "too long", "audio length", "exceed"]):
+                    response = await _recognize_long()
+                    return _join_response(response)
+            except Exception:
+                pass
+
             print(f"Transcription error: {e}")
             return {
                 "text": "",

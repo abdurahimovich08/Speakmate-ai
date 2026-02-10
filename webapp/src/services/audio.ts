@@ -40,7 +40,11 @@ export class AudioRecorder {
         ? 'audio/ogg;codecs=opus'
         : 'audio/webm'
 
-    this.mediaRecorder = new MediaRecorder(this.stream, { mimeType })
+    // Keep audio payloads small so WebSocket messages don't hit size limits on mobile networks.
+    this.mediaRecorder = new MediaRecorder(this.stream, {
+      mimeType,
+      audioBitsPerSecond: 48000,
+    })
 
     this.mediaRecorder.ondataavailable = async (event) => {
       if (event.data.size > 0) {
