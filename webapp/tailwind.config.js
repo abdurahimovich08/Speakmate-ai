@@ -39,6 +39,8 @@ export default {
           border: 'var(--sm-border)',
           accent: 'var(--sm-accent)',
           accent2: 'var(--sm-accent-2)',
+          energy: 'var(--sm-energy)',
+          energy2: 'var(--sm-energy-2)',
           text: 'var(--sm-text)',
           muted: 'var(--sm-muted)',
           success: 'var(--sm-success)',

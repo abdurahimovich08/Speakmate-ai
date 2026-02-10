@@ -25,6 +25,7 @@ interface SessionState {
   isRecording: boolean
   isConnected: boolean
   isEnding: boolean
+  isThinking: boolean
 
   // Results
   scores: IELTSScores | null
@@ -53,6 +54,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   isRecording: false,
   isConnected: false,
   isEnding: false,
+  isThinking: false,
   scores: null,
   errors: [],
   recommendations: [],
@@ -62,7 +64,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   startSession: async (mode, topic) => {
     // 1. Create session via REST
     const session = await api.createSession(mode, topic)
-    set({ session, messages: [], scores: null, errors: [], recommendations: [], isEnding: false })
+    set({
+      session,
+      messages: [],
+      scores: null,
+      errors: [],
+      recommendations: [],
+      isEnding: false,
+      isThinking: false,
+    })
 
     // 2. Connect WebSocket
     const socket = new ConversationSocket(session.id)
@@ -76,13 +86,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       set({ currentTranscription: data.text })
       if (data.is_final) {
         get().addMessage({ role: 'user', content: data.text })
-        set({ currentTranscription: '' })
+        set({ currentTranscription: '', isThinking: true })
       }
     })
 
     socket.on('ai_message', (msg) => {
       const data = msg.data as unknown as WSAIMessage
       get().addMessage({ role: 'assistant', content: data.text })
+      set({ isThinking: false })
     })
 
     socket.on('session_ended', (msg) => {
@@ -93,6 +104,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         recommendations: data.recommendations || [],
         isConnected: false,
         isEnding: false,
+        isThinking: false,
       })
     })
 
@@ -140,6 +152,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       isRecording: false,
       isConnected: false,
       isEnding: false,
+      isThinking: false,
       scores: null,
       errors: [],
       recommendations: [],

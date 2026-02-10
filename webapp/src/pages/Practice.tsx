@@ -1,32 +1,78 @@
 /* ===========================
-   Practice — Mode & topic selection, then start session
+   Practice - Energetic setup: mode + topic + start
    =========================== */
 
-import { useState, useCallback } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSessionStore } from '../stores/sessionStore'
 import { useTelegramBackButton } from '../hooks/useTelegram'
 import { telegramService } from '../services/telegram'
+import { Button } from '../components/ui/Button'
+import { Card, SoftCard } from '../components/ui/Card'
 import type { SessionMode } from '../types'
 
-const modes: { id: SessionMode; icon: string; title: string; desc: string }[] = [
-  { id: 'free_speaking', icon: '💬', title: 'Free Speaking', desc: 'Erkin mavzuda suhbat' },
-  { id: 'ielts_test', icon: '📝', title: 'IELTS Mock Test', desc: 'IELTS speaking simulyatsiya' },
-  { id: 'training', icon: '🏋️', title: 'Training', desc: 'Xatolar bo\'yicha mashq' },
+const modes: Array<{
+  id: SessionMode
+  title: string
+  desc: string
+  vibe: string
+}> = [
+  {
+    id: 'free_speaking',
+    title: 'Free Speaking',
+    desc: 'Real conversation. Fast feedback.',
+    vibe: 'ENERGY',
+  },
+  {
+    id: 'ielts_test',
+    title: 'IELTS Mock',
+    desc: 'Exam-style prompts + scoring.',
+    vibe: 'FOCUS',
+  },
+  {
+    id: 'training',
+    title: 'Training',
+    desc: 'Fix recurring mistakes with drills.',
+    vibe: 'BUILD',
+  },
 ]
 
 const topics: Record<SessionMode, string[]> = {
   free_speaking: [
-    'Hobbies & Interests', 'Travel', 'Technology', 'Education',
-    'Food & Cooking', 'Sports', 'Music', 'Movies', 'Family', 'Work',
+    'Work',
+    'Education',
+    'Travel',
+    'Technology',
+    'Family',
+    'Food',
+    'Health',
+    'Goals',
+    'Weekend',
+    'Surprise me',
   ],
-  ielts_test: [
-    'Part 1: Introduction', 'Part 2: Long Turn', 'Part 3: Discussion',
-    'Full Test (Parts 1-3)',
-  ],
-  training: [
-    'Grammar Focus', 'Pronunciation', 'Vocabulary Building', 'Fluency',
-  ],
+  ielts_test: ['Part 1', 'Part 2', 'Part 3', 'Full test'],
+  training: ['Grammar', 'Pronunciation', 'Vocabulary', 'Fluency'],
+}
+
+function Chip({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean
+  children: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-2 rounded-full text-sm border border-sm-border transition-transform active:scale-[0.98] ${
+        active ? 'bg-tg-button text-tg-button-text' : 'bg-sm-card2 text-sm-text'
+      }`}
+    >
+      {children}
+    </button>
+  )
 }
 
 export default function Practice() {
@@ -35,97 +81,117 @@ export default function Practice() {
   const [selectedMode, setSelectedMode] = useState<SessionMode>(preMode || 'free_speaking')
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
   const navigate = useNavigate()
   const startSession = useSessionStore((s) => s.startSession)
-
   useTelegramBackButton(true)
+
+  const topicList = useMemo(() => topics[selectedMode] || [], [selectedMode])
 
   const handleStart = useCallback(async () => {
     setLoading(true)
     telegramService.hapticImpact('medium')
     try {
-      await startSession(selectedMode, selectedTopic || undefined)
+      const topic = selectedTopic === 'Surprise me' ? undefined : selectedTopic || undefined
+      await startSession(selectedMode, topic)
       navigate('/session/active')
     } catch (e) {
       console.error('Failed to start session:', e)
       telegramService.hapticNotification('error')
-      await telegramService.alert('Sessiyani boshlashda xatolik yuz berdi. Qaytadan urinib ko\'ring.')
+      await telegramService.alert("Sessiyani boshlashda xatolik. Qaytadan urinib ko'ring.")
     } finally {
       setLoading(false)
     }
   }, [selectedMode, selectedTopic, startSession, navigate])
 
   return (
-    <div className="p-4 animate-fade-in">
-      {/* Mode selection */}
-      <h2 className="font-semibold mb-3 text-tg-section-header text-sm uppercase">
-        Mashq turi
-      </h2>
-      <div className="space-y-2 mb-6">
-        {modes.map((m) => (
-          <button
-            key={m.id}
-            onClick={() => {
-              setSelectedMode(m.id)
-              setSelectedTopic(null)
-              telegramService.hapticSelection()
-            }}
-            className={`w-full text-left rounded-xl p-4 transition-all ${
-              selectedMode === m.id
-                ? 'bg-tg-button text-tg-button-text'
-                : 'bg-tg-section text-tg-text'
-            }`}
-          >
-            <span className="text-xl mr-2">{m.icon}</span>
-            <span className="font-medium">{m.title}</span>
-            <p className={`text-xs mt-0.5 ${
-              selectedMode === m.id ? 'text-tg-button-text opacity-80' : 'text-tg-hint'
-            }`}>{m.desc}</p>
-          </button>
-        ))}
+    <div className="p-4 animate-fade-in font-ui">
+      <Card className="p-4 mb-4 overflow-hidden relative">
+        <div className="absolute inset-0 opacity-25 bg-gradient-to-br from-sm-energy2 via-transparent to-sm-accent" />
+        <div className="relative">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Warm up</p>
+          <h1 className="text-2xl font-semibold font-display mt-1">Start a session</h1>
+          <p className="text-xs text-sm-muted mt-2">
+            Choose mode, pick a topic, then go. Coach will score you at the end.
+          </p>
+        </div>
+      </Card>
+
+      <div className="space-y-3">
+        {modes.map((m) => {
+          const active = selectedMode === m.id
+          return (
+            <button
+              key={m.id}
+              onClick={() => {
+                setSelectedMode(m.id)
+                setSelectedTopic(null)
+                telegramService.hapticSelection()
+              }}
+              className={`w-full text-left rounded-2xl p-4 border transition-transform active:scale-[0.99] ${
+                active ? 'border-transparent' : 'border-sm-border'
+              }`}
+              style={{
+                background: active
+                  ? 'linear-gradient(90deg, var(--sm-accent), var(--sm-energy-2), var(--sm-energy))'
+                  : 'var(--sm-card)',
+                color: active ? 'white' : 'var(--sm-text)',
+              }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold tracking-tight">{m.title}</p>
+                  <p className={`text-xs mt-1 ${active ? 'opacity-90' : 'text-sm-muted'}`}>{m.desc}</p>
+                </div>
+                <span
+                  className={`text-[11px] font-semibold tracking-[0.18em] px-2 py-1 rounded-full border ${
+                    active ? 'border-white/20 bg-white/10' : 'border-sm-border bg-sm-card2 text-sm-muted'
+                  }`}
+                >
+                  {m.vibe}
+                </span>
+              </div>
+            </button>
+          )
+        })}
       </div>
 
-      {/* Topic selection */}
-      <h2 className="font-semibold mb-3 text-tg-section-header text-sm uppercase">
-        Mavzu tanlang
-      </h2>
-      <div className="flex flex-wrap gap-2 mb-8">
-        {(topics[selectedMode] || []).map((topic) => (
-          <button
-            key={topic}
-            onClick={() => {
-              setSelectedTopic(topic === selectedTopic ? null : topic)
-              telegramService.hapticSelection()
-            }}
-            className={`px-3 py-2 rounded-full text-sm transition-all ${
-              selectedTopic === topic
-                ? 'bg-tg-button text-tg-button-text'
-                : 'bg-tg-secondary text-tg-text'
-            }`}
-          >
-            {topic}
-          </button>
-        ))}
-      </div>
+      <SoftCard className="rounded-2xl p-4 mt-4">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Topic</p>
+          <p className="text-[11px] text-sm-muted">{selectedTopic ? 'Selected' : 'Optional'}</p>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {topicList.map((topic) => (
+            <Chip
+              key={topic}
+              active={selectedTopic === topic}
+              onClick={() => {
+                setSelectedTopic(topic === selectedTopic ? null : topic)
+                telegramService.hapticSelection()
+              }}
+            >
+              {topic}
+            </Chip>
+          ))}
+        </div>
+      </SoftCard>
 
-      {/* Start button */}
-      <button
-        onClick={handleStart}
-        disabled={loading}
-        className={`w-full py-4 rounded-2xl text-lg font-bold transition-all ${
-          loading
-            ? 'bg-tg-hint text-tg-button-text opacity-60'
-            : 'bg-tg-button text-tg-button-text active:scale-[0.98]'
-        }`}
-      >
-        {loading ? (
-          <span className="flex items-center justify-center gap-2">
-            <span className="animate-spin-slow">⏳</span> Tayyorlanmoqda...
-          </span>
-        ) : (
-          '🎙 Mashqni boshlash'
-        )}
-      </button>
+      <div className="mt-4">
+        <Button
+          variant="primary"
+          size="lg"
+          disabled={loading}
+          className="w-full"
+          onClick={handleStart}
+        >
+          {loading ? 'Preparing...' : 'Start'}
+        </Button>
+        <p className="text-[11px] text-sm-muted mt-2 text-center">
+          Tip: speak 60-90 seconds per answer for stronger scoring.
+        </p>
+      </div>
     </div>
   )
 }
+

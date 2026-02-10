@@ -1,5 +1,5 @@
 /* ===========================
-   Results — Session results with scores and errors
+   Results - Premium session report
    =========================== */
 
 import { useEffect, useState } from 'react'
@@ -9,31 +9,31 @@ import { useSessionStore } from '../stores/sessionStore'
 import { getSession, getSessionErrors, getConversation, getSessionFeedback } from '../services/api'
 import ScoreCard from '../components/ScoreCard'
 import ErrorList from '../components/ErrorList'
-import type { Session, DetectedError, ConversationTurn, IELTSScores, SessionFeedback } from '../types'
+import { Button } from '../components/ui/Button'
+import { Card, SoftCard } from '../components/ui/Card'
+import type {
+  Session,
+  DetectedError,
+  ConversationTurn,
+  IELTSScores,
+  SessionFeedback,
+} from '../types'
 
 export default function Results() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   useTelegramBackButton(true)
 
-  // Try to get data from store first (just-finished session)
   const storeScores = useSessionStore((s) => s.scores)
   const storeErrors = useSessionStore((s) => s.errors)
   const storeRecommendations = useSessionStore((s) => s.recommendations)
   const storeSession = useSessionStore((s) => s.session)
 
-  const [session, setSession] = useState<Session | null>(
-    storeSession?.id === id ? storeSession : null,
-  )
-  const [scores, setScores] = useState<IELTSScores | null>(
-    storeSession?.id === id ? storeScores : null,
-  )
-  const [errors, setErrors] = useState<DetectedError[]>(
-    storeSession?.id === id ? storeErrors : [],
-  )
-  const [recommendations, setRecommendations] = useState<string[]>(
-    storeSession?.id === id ? storeRecommendations : [],
-  )
+  const [session, setSession] = useState<Session | null>(storeSession?.id === id ? storeSession : null)
+  const [scores, setScores] = useState<IELTSScores | null>(storeSession?.id === id ? storeScores : null)
+  const [errors, setErrors] = useState<DetectedError[]>(storeSession?.id === id ? storeErrors : [])
+  const [recommendations, setRecommendations] = useState<string[]>(storeSession?.id === id ? storeRecommendations : [])
+  const [strengths, setStrengths] = useState<string[]>([])
   const [summary, setSummary] = useState<string>('')
   const [conversation, setConversation] = useState<ConversationTurn[]>([])
   const [tab, setTab] = useState<'scores' | 'errors' | 'chat'>('scores')
@@ -41,7 +41,7 @@ export default function Results() {
 
   useEffect(() => {
     if (!id) return
-    if (session && scores) return // already have data
+    if (session && scores) return
 
     setLoading(true)
     Promise.all([
@@ -56,12 +56,9 @@ export default function Results() {
         setErrors(e)
         setConversation(c)
         if (feedback) {
-          if (Array.isArray(feedback.recommendations)) {
-            setRecommendations(feedback.recommendations)
-          }
-          if (typeof feedback.summary === 'string') {
-            setSummary(feedback.summary)
-          }
+          if (Array.isArray(feedback.recommendations)) setRecommendations(feedback.recommendations)
+          if (Array.isArray(feedback.strengths)) setStrengths(feedback.strengths)
+          if (typeof feedback.summary === 'string') setSummary(feedback.summary)
         }
       })
       .catch(console.error)
@@ -70,72 +67,101 @@ export default function Results() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <span className="text-3xl animate-spin-slow">⏳</span>
+      <div className="flex items-center justify-center h-screen font-ui">
+        <div className="sm-card p-4">
+          <p className="text-sm text-sm-muted">Loading session report...</p>
+        </div>
       </div>
     )
   }
 
   const duration = session?.duration_seconds || 0
-  const minutes = Math.floor(duration / 60)
+  const minutes = Math.max(0, Math.floor(duration / 60))
 
   return (
-    <div className="p-4 animate-fade-in">
-      {/* Header */}
-      <div className="text-center mb-4">
-        <h1 className="text-xl font-bold">Sessiya natijalari</h1>
-        <p className="text-sm text-tg-hint">
-          {session?.topic || session?.mode} · {minutes} daqiqa
-        </p>
-      </div>
+    <div className="p-4 animate-fade-in font-ui">
+      <Card className="p-4 mb-4 overflow-hidden relative">
+        <div className="absolute inset-0 opacity-25 bg-gradient-to-r from-sm-energy2 via-transparent to-sm-accent" />
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Session report</p>
+            <h1 className="text-2xl font-semibold font-display mt-1">Natijalar</h1>
+            <p className="text-xs text-sm-muted mt-2 truncate">
+              {session?.topic || session?.mode || 'session'} · {minutes} min
+            </p>
+          </div>
+          <div className="shrink-0">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                useSessionStore.getState().reset()
+                navigate('/practice')
+              }}
+            >
+              Practice
+            </Button>
+          </div>
+        </div>
+      </Card>
 
-      {/* Tabs */}
-      <div className="flex bg-tg-secondary rounded-xl p-1 mb-4">
+      <div className="flex bg-sm-card2 rounded-2xl p-1 mb-4 border border-sm-border">
         {(['scores', 'errors', 'chat'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-2 text-sm rounded-lg font-medium transition-all ${
-              tab === t ? 'bg-tg-section text-tg-text shadow-sm' : 'text-tg-hint'
+            className={`flex-1 py-2.5 text-sm rounded-xl font-medium transition-all tracking-tight ${
+              tab === t ? 'bg-sm-card text-sm-text shadow-smcard' : 'text-sm-muted'
             }`}
           >
-            {t === 'scores' ? '📊 Ballar' : t === 'errors' ? `❌ Xatolar (${errors.length})` : '💬 Chat'}
+            {t === 'scores' ? 'Scores' : t === 'errors' ? `Errors (${errors.length})` : 'Chat'}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
-      {tab === 'scores' && scores && <ScoreCard scores={scores} />}
+      {tab === 'scores' && scores && (
+        <div className="space-y-4">
+          <ScoreCard scores={scores} />
 
-      {tab === 'errors' && <ErrorList errors={errors} />}
+          {strengths.length > 0 && (
+            <SoftCard className="rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Strengths</p>
+              <ul className="mt-3 space-y-2 text-sm">
+                {strengths.slice(0, 3).map((s, idx) => (
+                  <li key={idx} className="flex gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-sm-energy" />
+                    <span className="leading-relaxed">{s}</span>
+                  </li>
+                ))}
+              </ul>
+            </SoftCard>
+          )}
 
-      {tab === 'scores' && recommendations.length > 0 && (
-        <div className="mt-4 bg-tg-section rounded-xl p-4">
-          <h2 className="font-semibold mb-2">Tavsiyalar</h2>
-          <ul className="space-y-2 text-sm text-tg-text">
-            {recommendations.map((tip, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="text-tg-link">•</span>
-                <span>{tip}</span>
-              </li>
-            ))}
-          </ul>
-          {summary && <p className="text-xs text-tg-hint mt-3">{summary}</p>}
+          {recommendations.length > 0 && (
+            <SoftCard className="rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Next steps</p>
+              <ul className="mt-3 space-y-2 text-sm">
+                {recommendations.slice(0, 6).map((tip, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-sm-accent" />
+                    <span className="leading-relaxed">{tip}</span>
+                  </li>
+                ))}
+              </ul>
+              {summary && <p className="text-xs text-sm-muted mt-3 leading-relaxed">{summary}</p>}
+            </SoftCard>
+          )}
         </div>
       )}
+
+      {tab === 'errors' && <ErrorList errors={errors} />}
 
       {tab === 'chat' && (
         <div className="space-y-2">
           {conversation.map((turn, i) => (
-            <div
-              key={i}
-              className={`max-w-[85%] ${turn.role === 'user' ? 'ml-auto' : 'mr-auto'}`}
-            >
+            <div key={i} className={`max-w-[88%] ${turn.role === 'user' ? 'ml-auto' : 'mr-auto'}`}>
               <div
-                className={`rounded-2xl px-3 py-2 text-sm ${
-                  turn.role === 'user'
-                    ? 'bg-tg-button text-tg-button-text'
-                    : 'bg-tg-secondary text-tg-text'
+                className={`rounded-2xl px-4 py-3 text-sm border border-sm-border ${
+                  turn.role === 'user' ? 'bg-tg-button text-tg-button-text' : 'bg-sm-card2 text-sm-text'
                 }`}
               >
                 {turn.content}
@@ -143,21 +169,26 @@ export default function Results() {
             </div>
           ))}
           {conversation.length === 0 && (
-            <p className="text-center text-tg-hint py-6">Suhbat ma'lumotlari topilmadi</p>
+            <p className="text-center text-sm-muted py-10">Conversation not found.</p>
           )}
         </div>
       )}
 
-      {/* Practice again */}
-      <button
-        onClick={() => {
-          useSessionStore.getState().reset()
-          navigate('/practice')
-        }}
-        className="w-full mt-6 py-3 rounded-xl bg-tg-button text-tg-button-text font-semibold active:scale-[0.98] transition-transform"
-      >
-        🔄 Yana mashq qilish
-      </button>
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <Button variant="ghost" onClick={() => navigate('/coach')}>
+          Super Coach
+        </Button>
+        <Button
+          variant="primary"
+          onClick={() => {
+            useSessionStore.getState().reset()
+            navigate('/practice')
+          }}
+        >
+          Practice again
+        </Button>
+      </div>
     </div>
   )
 }
+

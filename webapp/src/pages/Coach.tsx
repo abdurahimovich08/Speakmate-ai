@@ -1,8 +1,9 @@
 /* ===========================
-   Super Coach Dashboard
+   Super Coach - Premium daily coach dashboard
    =========================== */
 
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTelegramBackButton } from '../hooks/useTelegram'
 import { telegramService } from '../services/telegram'
 import {
@@ -20,6 +21,8 @@ import {
   submitMnemonicFeedback,
   updateCoachMemory,
 } from '../services/api'
+import { Button } from '../components/ui/Button'
+import { Card, SoftCard } from '../components/ui/Card'
 import type {
   BehaviorInsight,
   CoachMemory,
@@ -53,8 +56,18 @@ function asCoachMemory(payload: Record<string, unknown>): CoachMemory | null {
   return payload as unknown as CoachMemory
 }
 
+function clamp01(v: number) {
+  if (!Number.isFinite(v)) return 0
+  return Math.max(0, Math.min(1, v))
+}
+
+function pct(n: number) {
+  return `${Math.round(clamp01(n) * 100)}%`
+}
+
 export default function Coach() {
   useTelegramBackButton(true)
+  const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -76,7 +89,7 @@ export default function Coach() {
 
   const missionCompletion = useMemo(() => {
     if (!mission) return 0
-    return Math.round((completed.length / Math.max(1, mission.tasks.length)) * 100)
+    return clamp01(completed.length / Math.max(1, mission.tasks.length))
   }, [completed, mission])
 
   const loadDashboard = async () => {
@@ -107,7 +120,7 @@ export default function Coach() {
       setCompleted([])
     } catch (e) {
       console.error(e)
-      setError('Failed to load Super Coach dashboard')
+      setError('Could not load Super Coach. Check backend + CORS settings, then retry.')
     } finally {
       setLoading(false)
     }
@@ -119,11 +132,9 @@ export default function Coach() {
   }, [comfortMode])
 
   const toggleTask = (taskId: string) => {
-    setCompleted((prev) => (
-      prev.includes(taskId)
-        ? prev.filter((item) => item !== taskId)
-        : [...prev, taskId]
-    ))
+    setCompleted((prev) =>
+      prev.includes(taskId) ? prev.filter((item) => item !== taskId) : [...prev, taskId],
+    )
     telegramService.hapticSelection()
   }
 
@@ -158,10 +169,7 @@ export default function Coach() {
         .split(';')
         .map((g) => g.trim())
         .filter(Boolean)
-      const updated = await updateCoachMemory({
-        goals,
-        notes: notesInput,
-      })
+      const updated = await updateCoachMemory({ goals, notes: notesInput })
       setMemory(asCoachMemory(updated))
       telegramService.hapticNotification('success')
     } catch (e) {
@@ -203,234 +211,436 @@ export default function Coach() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <span className="text-3xl animate-spin-slow">Loading...</span>
+      <div className="p-4 font-ui">
+        <Card className="p-4">
+          <p className="text-sm text-sm-muted">Loading your coach...</p>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="p-4 space-y-4 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold">Super Coach</h1>
-        <p className="text-sm text-tg-hint">Daily loop: recall, fix, speak.</p>
-        {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
-      </div>
+    <div className="p-4 space-y-4 animate-fade-in font-ui">
+      <Card className="p-4 overflow-hidden relative">
+        <div className="absolute inset-0 opacity-25 bg-gradient-to-r from-sm-energy via-transparent to-sm-accent" />
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Super Coach</p>
+            <h1 className="text-2xl font-semibold font-display mt-1">Daily loop</h1>
+            <p className="text-xs text-sm-muted mt-2 leading-relaxed">
+              10-15 minut: Recall → Fix → Speak. Energiya bilan, lekin aniq.
+            </p>
+            {error && <p className="text-xs text-sm-danger mt-3">{error}</p>}
+          </div>
+          <div className="shrink-0 flex flex-col gap-2">
+            <Button variant="ghost" onClick={() => loadDashboard()} disabled={saving}>
+              Reload
+            </Button>
+            <Button variant="primary" onClick={() => navigate('/practice')}>
+              Practice
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       {mission && (
-        <section className="bg-tg-section rounded-2xl p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Daily Mission ({mission.total_minutes} min)</h2>
-            <span className="text-xs text-tg-hint">{mission.difficulty}</span>
+        <Card className="p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Today</p>
+              <h2 className="text-lg font-semibold tracking-tight mt-1">
+                Daily Mission ({mission.total_minutes} min)
+              </h2>
+              <p className="text-xs text-sm-muted mt-2">
+                Best window: {mission.best_time_to_practice.window} · Difficulty: {mission.difficulty}
+              </p>
+            </div>
+
+            <div className="shrink-0 text-right">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Completion</p>
+              <p className="text-2xl font-semibold font-display tabular-nums mt-1">
+                {pct(missionCompletion)}
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-tg-hint mt-1">
-            Best window: {mission.best_time_to_practice.window}
-          </p>
-          <div className="mt-3 space-y-2">
-            {mission.tasks.map((task) => (
-              <button
-                key={task.id}
-                onClick={() => toggleTask(task.id)}
-                className="w-full text-left bg-tg-secondary rounded-xl p-3"
-              >
-                <div className="flex items-start gap-3">
-                  <span>{completed.includes(task.id) ? '[x]' : '[ ]'}</span>
-                  <div>
-                    <p className="font-medium text-sm">{task.title} ({task.duration_min}m)</p>
-                    <p className="text-xs text-tg-hint">{task.instruction}</p>
+
+          <div className="mt-4 space-y-2">
+            {mission.tasks.map((task) => {
+              const done = completed.includes(task.id)
+              return (
+                <button
+                  key={task.id}
+                  onClick={() => toggleTask(task.id)}
+                  className="w-full text-left sm-card-soft rounded-2xl p-4 transition-transform active:scale-[0.985]"
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-xl border border-sm-border ${
+                        done ? 'bg-tg-button text-tg-button-text' : 'bg-sm-card2 text-sm-muted'
+                      }`}
+                    >
+                      {done ? '✓' : ''}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold tracking-tight">
+                        {task.title} <span className="text-xs text-sm-muted">({task.duration_min}m)</span>
+                      </p>
+                      <p className="text-xs text-sm-muted mt-1 leading-relaxed">{task.instruction}</p>
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              )
+            })}
           </div>
-          <div className="flex items-center justify-between mt-3">
-            <p className="text-xs text-tg-hint">Completion: {missionCompletion}%</p>
-            <button
-              disabled={saving}
-              onClick={handleCompleteMission}
-              className="px-4 py-2 rounded-xl bg-tg-button text-tg-button-text text-sm"
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setCompleted(mission.tasks.map((t) => t.id))
+                telegramService.hapticSelection()
+              }}
             >
-              {saving ? 'Saving...' : 'Complete Mission'}
-            </button>
+              Mark all
+            </Button>
+            <Button
+              variant="primary"
+              disabled={saving || completed.length === 0}
+              onClick={handleCompleteMission}
+            >
+              {saving ? 'Saving...' : 'Complete'}
+            </Button>
           </div>
-        </section>
+        </Card>
       )}
 
-      <section className="bg-tg-section rounded-2xl p-4">
-        <h2 className="font-semibold">Error Recurrence Mnemonics</h2>
-        <div className="mt-3 space-y-2">
-          {drills.length === 0 && <p className="text-sm text-tg-hint">No recurring errors yet.</p>}
+      <Card className="p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Fix fast</p>
+            <h2 className="text-lg font-semibold tracking-tight mt-1">Mnemonic drills</h2>
+            <p className="text-xs text-sm-muted mt-2 leading-relaxed">
+              Agar xato 3 marta takrorlansa, biz uni “memory hook” bilan mixlab, qayta-qayta eslatamiz.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {drills.length === 0 && (
+            <SoftCard className="p-4">
+              <p className="text-sm text-sm-muted">Hali recurring error yo‘q. Gapiring, biz topamiz.</p>
+            </SoftCard>
+          )}
+
           {drills.map((drill) => (
-            <div key={`${drill.error_code}-${drill.style}`} className="bg-tg-secondary rounded-xl p-3">
-              <p className="text-sm font-medium">{drill.error_code} ({drill.style})</p>
-              <p className="text-xs text-tg-hint mt-1">{drill.mnemonic}</p>
-              <div className="flex gap-2 mt-2">
-                {[3, 4, 5].map((score) => (
+            <SoftCard key={`${drill.error_code}-${drill.style}`} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold tracking-tight truncate">
+                    {drill.error_code}
+                    <span className="text-xs text-sm-muted"> · {drill.style}</span>
+                  </p>
+                  <p className="text-xs text-sm-muted mt-2 leading-relaxed">{drill.mnemonic}</p>
+                </div>
+                <div className="shrink-0 text-[11px] text-sm-muted">
+                  {drill.category}
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-5 gap-2">
+                {[1, 2, 3, 4, 5].map((score) => (
                   <button
                     key={score}
                     onClick={() => handleMnemonicFeedback(drill, score)}
-                    className="px-2 py-1 rounded-lg text-xs bg-tg-button text-tg-button-text"
+                    className="py-2 rounded-xl text-xs font-semibold bg-sm-card2 border border-sm-border text-sm-text active:scale-[0.98] transition-transform"
                   >
-                    {score}/5
+                    {score}
                   </button>
                 ))}
               </div>
-            </div>
+              <p className="text-[11px] text-sm-muted mt-2">
+                Rate: 1 = useless, 5 = sticks in your head.
+              </p>
+            </SoftCard>
           ))}
         </div>
-      </section>
+      </Card>
 
-      {skillGraph && (
-        <section className="bg-tg-section rounded-2xl p-4">
-          <h2 className="font-semibold">Skill Graph</h2>
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <div className="bg-tg-secondary rounded-xl p-3">
-              <p className="text-xs text-tg-hint uppercase">Top Weak</p>
-              {skillGraph.top_weak.map((s) => (
-                <p key={s.skill_id} className="text-sm mt-1">{s.label}: {s.score}</p>
-              ))}
+      <div className="grid grid-cols-1 gap-4">
+        {skillGraph && (
+          <Card className="p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Map</p>
+            <h2 className="text-lg font-semibold tracking-tight mt-1">Skill graph</h2>
+            <p className="text-xs text-sm-muted mt-2 leading-relaxed">
+              Level emas, micro-skill. Eng kuchli 2 va eng zaif 3 fokus.
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <SoftCard className="p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Top weak</p>
+                <div className="mt-3 space-y-2">
+                  {skillGraph.top_weak.slice(0, 3).map((s) => (
+                    <div key={s.skill_id}>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium tracking-tight">{s.label}</p>
+                        <p className="text-sm font-semibold tabular-nums">{s.score.toFixed(1)}</p>
+                      </div>
+                      <div className="mt-2 h-2 rounded-full bg-sm-card2 overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${Math.round((Math.max(0, Math.min(9, s.score)) / 9) * 100)}%`,
+                            background: 'linear-gradient(90deg, var(--sm-energy-2), var(--sm-accent))',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  {skillGraph.top_weak.length === 0 && (
+                    <p className="text-sm text-sm-muted">More data needed.</p>
+                  )}
+                </div>
+              </SoftCard>
+
+              <SoftCard className="p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Top improving</p>
+                <div className="mt-3 space-y-2">
+                  {skillGraph.top_improving.slice(0, 3).map((s) => (
+                    <div key={s.skill_id} className="flex items-center justify-between">
+                      <p className="text-sm font-medium tracking-tight">{s.label}</p>
+                      <p className="text-sm font-semibold tabular-nums text-sm-success">
+                        +{s.trend_delta.toFixed(1)}
+                      </p>
+                    </div>
+                  ))}
+                  {skillGraph.top_improving.length === 0 && (
+                    <p className="text-sm text-sm-muted">More sessions → more signal.</p>
+                  )}
+                </div>
+              </SoftCard>
             </div>
-            <div className="bg-tg-secondary rounded-xl p-3">
-              <p className="text-xs text-tg-hint uppercase">Top Improving</p>
-              {skillGraph.top_improving.length === 0 && (
-                <p className="text-sm mt-1 text-tg-hint">More data needed</p>
-              )}
-              {skillGraph.top_improving.map((s) => (
-                <p key={s.skill_id} className="text-sm mt-1">{s.label}: +{s.trend_delta}</p>
-              ))}
+
+            {skillGraph.focus_recommendation?.length ? (
+              <div className="mt-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Focus</p>
+                <ul className="mt-2 space-y-2 text-sm">
+                  {skillGraph.focus_recommendation.slice(0, 3).map((t, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span className="mt-2 h-1.5 w-1.5 rounded-full bg-sm-energy" />
+                      <span className="leading-relaxed">{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </Card>
+        )}
+
+        {proof && (
+          <Card className="p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Proof</p>
+            <h2 className="text-lg font-semibold tracking-tight mt-1">Progress dashboard</h2>
+            <p className="text-xs text-sm-muted mt-2 leading-relaxed">
+              Eng katta retention savol: “Men o‘tgan haftadan yaxshimanmi?” Bu yerda javob bor.
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <SoftCard className="p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Status</p>
+                <p className="text-lg font-semibold mt-2 tracking-tight">{proof.status}</p>
+                <p className="text-xs text-sm-muted mt-1">Confidence: {pct(proof.confidence || 0)}</p>
+              </SoftCard>
+
+              <SoftCard className="p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Weekly vibe</p>
+                <p className="text-sm mt-2 leading-relaxed">
+                  {proof.status === 'needs_more_data'
+                    ? 'Ko‘proq session kerak. 3-5 ta practice qiling, keyin trend aniq bo‘ladi.'
+                    : 'Trend bor. Endi eng zaif 1 skillni 7 kun bosib ketamiz.'}
+                </p>
+              </SoftCard>
             </div>
+
+            {proof.deltas && (
+              <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                <SoftCard className="p-3">
+                  Band Δ: <b>{proof.deltas.band_delta}</b>
+                </SoftCard>
+                <SoftCard className="p-3">
+                  Filler Δ: <b>{proof.deltas.filler_rate_delta}%</b>
+                </SoftCard>
+                <SoftCard className="p-3">
+                  WPM Δ: <b>{proof.deltas.wpm_delta}</b>
+                </SoftCard>
+                <SoftCard className="p-3">
+                  Grammar Δ: <b>{proof.deltas.grammar_accuracy_delta}</b>
+                </SoftCard>
+              </div>
+            )}
+
+            {proof.highlights?.length ? (
+              <div className="mt-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Highlights</p>
+                <ul className="mt-2 space-y-2 text-sm">
+                  {proof.highlights.slice(0, 3).map((h) => (
+                    <li key={h} className="flex gap-2">
+                      <span className="mt-2 h-1.5 w-1.5 rounded-full bg-sm-accent" />
+                      <span className="leading-relaxed">{h}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </Card>
+        )}
+      </div>
+
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Speak-first</p>
+            <h2 className="text-lg font-semibold tracking-tight mt-1">Active drills</h2>
           </div>
-        </section>
-      )}
-
-      {proof && (
-        <section className="bg-tg-section rounded-2xl p-4">
-          <h2 className="font-semibold">Proof of Progress</h2>
-          <p className="text-xs text-tg-hint mt-1">
-            Confidence: {Math.round((proof.confidence || 0) * 100)}% ({proof.status})
-          </p>
-          {proof.highlights && (
-            <ul className="mt-2 space-y-1">
-              {proof.highlights.slice(0, 3).map((h) => (
-                <li key={h} className="text-sm">- {h}</li>
-              ))}
-            </ul>
-          )}
-          {proof.deltas && (
-            <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-              <div className="bg-tg-secondary rounded-lg p-2">Band d: {proof.deltas.band_delta}</div>
-              <div className="bg-tg-secondary rounded-lg p-2">Filler d: {proof.deltas.filler_rate_delta}%</div>
-              <div className="bg-tg-secondary rounded-lg p-2">WPM d: {proof.deltas.wpm_delta}</div>
-              <div className="bg-tg-secondary rounded-lg p-2">Grammar d: {proof.deltas.grammar_accuracy_delta}</div>
-            </div>
-          )}
-        </section>
-      )}
-
-      <section className="bg-tg-section rounded-2xl p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Speak-First Mode</h2>
-          <button
+          <Button
+            variant="ghost"
             onClick={() => setComfortMode((v) => !v)}
-            className="px-3 py-1 rounded-lg bg-tg-secondary text-xs"
           >
             {comfortMode ? 'Comfort ON' : 'Comfort OFF'}
-          </button>
+          </Button>
         </div>
-        <div className="space-y-2 mt-3">
-          {speakFirst?.drills.map((d) => (
-            <div key={d.id} className="bg-tg-secondary rounded-xl p-3">
-              <p className="text-sm font-medium">{d.title} ({d.duration_min}m)</p>
-              <p className="text-xs text-tg-hint">{d.instruction}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      <section className="bg-tg-section rounded-2xl p-4">
-        <h2 className="font-semibold">2-minute Diagnosis</h2>
+        <div className="mt-4 space-y-2">
+          {speakFirst?.drills?.map((d) => (
+            <SoftCard key={d.id} className="p-4">
+              <p className="text-sm font-semibold tracking-tight">
+                {d.title} <span className="text-xs text-sm-muted">({d.duration_min}m)</span>
+              </p>
+              <p className="text-xs text-sm-muted mt-2 leading-relaxed">{d.instruction}</p>
+            </SoftCard>
+          ))}
+          {!speakFirst?.drills?.length && (
+            <p className="text-sm text-sm-muted">No drills yet.</p>
+          )}
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Acquisition</p>
+        <h2 className="text-lg font-semibold tracking-tight mt-1">2-minute diagnosis</h2>
+        <p className="text-xs text-sm-muted mt-2 leading-relaxed">
+          Qisqa transcript tashlang. Coach sizga band + top 3 action beradi.
+        </p>
+
         <textarea
           value={diagnosisInput}
           onChange={(e) => setDiagnosisInput(e.target.value)}
           placeholder="Paste short speaking transcript..."
-          className="w-full mt-2 rounded-xl bg-tg-secondary p-3 text-sm min-h-[110px]"
+          className="mt-3 w-full rounded-2xl bg-sm-card2 border border-sm-border px-4 py-3 text-sm min-h-[110px] outline-none"
         />
-        <button
-          disabled={saving || diagnosisInput.trim().length < 20}
-          onClick={handleDiagnosis}
-          className="mt-2 px-4 py-2 rounded-xl bg-tg-button text-tg-button-text text-sm disabled:opacity-60"
-        >
-          Run Diagnosis
-        </button>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <Button
+            variant="ghost"
+            onClick={() => setDiagnosisInput('')}
+            disabled={saving || diagnosisInput.trim().length === 0}
+          >
+            Clear
+          </Button>
+          <Button
+            variant="primary"
+            disabled={saving || diagnosisInput.trim().length < 20}
+            onClick={handleDiagnosis}
+          >
+            {saving ? 'Running...' : 'Run diagnosis'}
+          </Button>
+        </div>
+
         {diagnosisResult && (
-          <div className="mt-3 bg-tg-secondary rounded-xl p-3 text-sm">
-            <p>Estimated band: <b>{String(diagnosisResult.estimated_band || '-')}</b></p>
-            <p className="text-xs text-tg-hint mt-1">
+          <SoftCard className="p-4 mt-4">
+            <p className="text-sm">
+              Estimated band:{' '}
+              <b className="tabular-nums">{String(diagnosisResult.estimated_band || '—')}</b>
+            </p>
+            <p className="text-xs text-sm-muted mt-2 leading-relaxed">
               {Array.isArray(diagnosisResult.top_actions)
                 ? (diagnosisResult.top_actions as string[]).join(' | ')
                 : ''}
             </p>
-          </div>
+          </SoftCard>
         )}
-      </section>
+      </Card>
 
       {memory && (
-        <section className="bg-tg-section rounded-2xl p-4">
-          <h2 className="font-semibold">Coach Memory</h2>
-          <p className="text-xs text-tg-hint mt-1">{memory.panel_hint}</p>
-          <label className="block text-xs mt-3 mb-1 text-tg-hint">Goals (separate with ;)</label>
+        <Card className="p-4">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Personalization</p>
+          <h2 className="text-lg font-semibold tracking-tight mt-1">Coach memory</h2>
+          <p className="text-xs text-sm-muted mt-2 leading-relaxed">{memory.panel_hint}</p>
+
+          <label className="block text-xs mt-4 text-sm-muted">Goals (separate with ;)</label>
           <input
             value={goalsInput}
             onChange={(e) => setGoalsInput(e.target.value)}
-            className="w-full rounded-xl bg-tg-secondary p-2 text-sm"
+            className="mt-2 w-full rounded-2xl bg-sm-card2 border border-sm-border px-4 py-3 text-sm outline-none"
           />
-          <label className="block text-xs mt-3 mb-1 text-tg-hint">Notes</label>
+
+          <label className="block text-xs mt-4 text-sm-muted">Notes</label>
           <textarea
             value={notesInput}
             onChange={(e) => setNotesInput(e.target.value)}
-            className="w-full rounded-xl bg-tg-secondary p-2 text-sm min-h-[90px]"
+            className="mt-2 w-full rounded-2xl bg-sm-card2 border border-sm-border px-4 py-3 text-sm min-h-[90px] outline-none"
           />
-          <div className="flex gap-2 mt-3">
-            <button
-              onClick={handleSaveMemory}
-              disabled={saving}
-              className="px-4 py-2 rounded-xl bg-tg-button text-tg-button-text text-sm"
-            >
-              Save Memory
-            </button>
-            <button
-              onClick={handleClearMemory}
-              disabled={saving}
-              className="px-4 py-2 rounded-xl bg-red-100 text-red-700 text-sm"
-            >
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <Button variant="ghost" onClick={handleClearMemory} disabled={saving}>
               Clear
-            </button>
+            </Button>
+            <Button variant="primary" onClick={handleSaveMemory} disabled={saving}>
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
           </div>
-        </section>
+        </Card>
       )}
 
-      <section className="bg-tg-section rounded-2xl p-4">
-        <h2 className="font-semibold">What Are We Not Seeing?</h2>
-        <div className="space-y-2 mt-3">
-          {insights.length === 0 && <p className="text-sm text-tg-hint">No insights yet.</p>}
+      <Card className="p-4">
+        <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Product thinking</p>
+        <h2 className="text-lg font-semibold tracking-tight mt-1">What are we not seeing?</h2>
+        <p className="text-xs text-sm-muted mt-2 leading-relaxed">
+          Foydalanuvchi qachon chiqib ketadi? Qaysi friction drop beradi? Insightlar shu yerda.
+        </p>
+
+        <div className="mt-4 space-y-2">
+          {insights.length === 0 && (
+            <SoftCard className="p-4">
+              <p className="text-sm text-sm-muted">No insights yet.</p>
+            </SoftCard>
+          )}
           {insights.map((insight, idx) => (
-            <div key={`${insight.risk}-${idx}`} className="bg-tg-secondary rounded-xl p-3">
-              <p className="text-sm font-medium">{insight.what_am_i_not_seeing}</p>
-              <p className="text-xs text-tg-hint mt-1">Action: {insight.action}</p>
-            </div>
+            <SoftCard key={`${insight.risk}-${idx}`} className="p-4">
+              <p className="text-sm font-semibold tracking-tight">{insight.what_am_i_not_seeing}</p>
+              <p className="text-xs text-sm-muted mt-2">Action: {insight.action}</p>
+            </SoftCard>
           ))}
         </div>
-      </section>
+      </Card>
 
       {shareCard && (
-        <section className="bg-tg-section rounded-2xl p-4">
-          <h2 className="font-semibold">Share Card Preview</h2>
-          <div className="mt-2 bg-tg-secondary rounded-xl p-3">
-            <p className="text-sm font-medium">{String(shareCard.title || 'Progress')}</p>
-            <p className="text-sm mt-1">{String(shareCard.win_text || '')}</p>
-            <p className="text-xs text-tg-hint mt-1">{String(shareCard.personal_tip || '')}</p>
+        <Card className="p-4">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Growth</p>
+          <h2 className="text-lg font-semibold tracking-tight mt-1">Share card (preview)</h2>
+          <p className="text-xs text-sm-muted mt-2 leading-relaxed">
+            Screenshot qilib ulashing. Har share card ichida bitta real tip bo‘lsin.
+          </p>
+
+          <SoftCard className="p-4 mt-4">
+            <p className="text-sm font-semibold tracking-tight">{String(shareCard.title || 'Progress')}</p>
+            <p className="text-sm mt-2 leading-relaxed">{String(shareCard.win_text || '')}</p>
+            <p className="text-xs text-sm-muted mt-2 leading-relaxed">{String(shareCard.personal_tip || '')}</p>
+          </SoftCard>
+
+          <div className="mt-3">
+            <Button variant="ghost" className="w-full" onClick={() => navigate('/practice')}>
+              Prove it again
+            </Button>
           </div>
-        </section>
+        </Card>
       )}
     </div>
   )

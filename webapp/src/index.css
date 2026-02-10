@@ -25,6 +25,10 @@
   --sm-success: #16a34a;
   --sm-warning: #f59e0b;
   --sm-danger: var(--tg-theme-destructive-text-color, #ef4444);
+
+  /* Energetic coach accents (fallback). */
+  --sm-energy: #22c55e;
+  --sm-energy-2: #f97316;
 }
 
 @supports (color: color-mix(in srgb, #000, #fff)) {
@@ -37,6 +41,10 @@
     --sm-muted: color-mix(in srgb, var(--tg-theme-hint-color, #6b7280) 86%, var(--sm-text) 14%);
     --sm-border: color-mix(in srgb, var(--sm-text) 12%, transparent);
     --sm-accent-2: color-mix(in srgb, var(--sm-accent) 70%, var(--sm-text) 30%);
+
+    /* Energy accents should feel alive but still tied to Telegram theme. */
+    --sm-energy: color-mix(in srgb, #22c55e 55%, var(--sm-accent) 45%);
+    --sm-energy-2: color-mix(in srgb, #f97316 55%, var(--sm-accent) 45%);
   }
 }
 
