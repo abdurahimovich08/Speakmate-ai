@@ -164,7 +164,7 @@ export default function Session() {
 
         {recording && (
           <p className="text-center text-xs text-red-500 mt-2 animate-pulse">
-            🔴 Yozib olinmoqda... Gapiring!
+            Yozib olinmoqda... Tugmani qayta bosib to'xtating, shunda AI javob beradi.
           </p>
         )}
       </div>
