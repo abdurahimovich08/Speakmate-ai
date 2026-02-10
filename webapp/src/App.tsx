@@ -36,22 +36,22 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-tg-bg text-tg-text">
-        <p className="text-lg font-semibold">SpeakMate AI</p>
-        <p className="text-sm text-tg-hint mt-1">Loading...</p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-sm-bg text-sm-text font-ui">
+        <p className="text-xl font-semibold font-display">SpeakMate</p>
+        <p className="text-sm text-sm-muted mt-2">Loading your coach...</p>
       </div>
     )
   }
 
   if (error || initError) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-tg-bg text-tg-text p-6 text-center">
-        <p className="text-lg font-semibold mb-2">Error</p>
-        <p className="text-sm text-tg-hint">{error || initError}</p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-sm-bg text-sm-text font-ui p-6 text-center">
+        <p className="text-lg font-semibold mb-2 font-display">Oops</p>
+        <p className="text-sm text-sm-muted">{error || initError}</p>
         {error && (
           <button
             onClick={() => login()}
-            className="mt-4 px-6 py-2 rounded-xl bg-tg-button text-tg-button-text text-sm"
+            className="mt-5 sm-btn-primary"
           >
             Retry
           </button>

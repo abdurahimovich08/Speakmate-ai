@@ -3,6 +3,17 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        ui: [
+          'Space Grotesk',
+          'ui-sans-serif',
+          'system-ui',
+          '-apple-system',
+          'Segoe UI',
+          'sans-serif',
+        ],
+        display: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+      },
       colors: {
         // Telegram theme-aware colors via CSS variables
         tg: {
@@ -20,6 +31,27 @@ export default {
           subtitle: 'var(--tg-theme-subtitle-text-color, #6d7885)',
           destructive: 'var(--tg-theme-destructive-text-color, #cc2424)',
         },
+        // SpeakMate premium tokens (derived from Telegram theme variables).
+        sm: {
+          bg: 'var(--sm-bg)',
+          card: 'var(--sm-card)',
+          card2: 'var(--sm-card-2)',
+          border: 'var(--sm-border)',
+          accent: 'var(--sm-accent)',
+          accent2: 'var(--sm-accent-2)',
+          text: 'var(--sm-text)',
+          muted: 'var(--sm-muted)',
+          success: 'var(--sm-success)',
+          warning: 'var(--sm-warning)',
+          danger: 'var(--sm-danger)',
+        },
+      },
+      boxShadow: {
+        smcard: '0 10px 30px rgba(0,0,0,0.10)',
+        smglow: '0 0 0 1px rgba(255,255,255,0.06), 0 18px 60px rgba(0,0,0,0.35)',
+      },
+      borderRadius: {
+        smxl: '22px',
       },
     },
   },
