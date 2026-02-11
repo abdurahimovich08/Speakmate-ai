@@ -46,6 +46,7 @@ class ConversationService:
     
     async def generate_greeting(self, topic: str = "general") -> str:
         """Generate initial conversation greeting."""
+        topic_text = str(topic or "general").lower()
         
         greetings = {
             "general": "Hello! It's great to chat with you today. What would you like to talk about?",
@@ -59,7 +60,7 @@ class ConversationService:
         
         # Find matching topic or use general
         for key in greetings:
-            if key in topic.lower():
+            if key in topic_text:
                 return greetings[key]
         
         return greetings["general"]

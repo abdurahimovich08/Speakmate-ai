@@ -198,13 +198,13 @@ async def conversation_websocket(
         "data": {
             "session_id": session_id,
             "mode": session.get("mode"),
-            "topic": session.get("topic"),
+            "topic": session.get("topic") or "general",
             "message": "Connected! Ready to start conversation."
         }
     })
     
     # Generate initial AI greeting
-    topic = session.get("topic", "general conversation")
+    topic = session.get("topic") or "general conversation"
     initial_response = await conversation_service.generate_greeting(topic)
     
     await manager.send_message(session_id, {
@@ -374,7 +374,7 @@ async def process_user_message(
     errors = await error_analyzer.analyze_text(
         text,
         native_language=session.get("native_language", "uz"),
-        topic=session.get("topic", "general")
+        topic=session.get("topic") or "general"
     )
     
     if errors:
@@ -386,7 +386,7 @@ async def process_user_message(
     response = await conversation_service.generate_response(
         user_message=text,
         conversation_history=session_data["conversation_history"],
-        topic=session.get("topic", "general"),
+        topic=session.get("topic") or "general",
         user_level="B1"  # TODO: Get from user profile
     )
     
@@ -479,7 +479,7 @@ async def end_conversation(
                 transcription=full_transcription,
                 errors=session_data.get("errors", []),
                 pronunciation_scores=pronunciation_result,
-                mode=session.get("mode", "free_speaking"),
+                mode=session.get("mode") or "free_speaking",
             )
             flattened_scores = _flatten_advanced_scores(advanced_scores)
             if flattened_scores:
