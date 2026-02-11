@@ -76,8 +76,19 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     // 2. Connect WebSocket
     const socket = new ConversationSocket(session.id)
+    let reconnectAttempts = 0
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer)
+        reconnectTimer = null
+      }
+    }
 
     socket.on('connected', () => {
+      reconnectAttempts = 0
+      clearReconnectTimer()
       set({ isConnected: true })
     })
 
@@ -110,9 +121,29 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     socket.on('disconnected', () => {
       set({ isConnected: false })
+
+      const state = get()
+      if (state.isEnding) return
+      if (state.socket !== socket) return
+      if (reconnectAttempts >= 3) return
+
+      reconnectAttempts += 1
+      const delay = 800 * reconnectAttempts
+      reconnectTimer = setTimeout(async () => {
+        try {
+          await socket.connect()
+        } catch {
+          // Next disconnected/error event will trigger retry until limit.
+        }
+      }, delay)
     })
 
-    await socket.connect()
+    try {
+      await socket.connect()
+    } catch (err) {
+      clearReconnectTimer()
+      throw err
+    }
     set({ socket })
   },
 

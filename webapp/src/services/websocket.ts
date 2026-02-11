@@ -7,11 +7,25 @@ import { useAuthStore } from '../stores/authStore'
 
 type MessageHandler = (msg: WSMessage) => void
 
-const WS_BASE = import.meta.env.VITE_WS_URL || 'ws://localhost:8000'
+function normalizeWsBase(): string {
+  const rawWs = (import.meta.env.VITE_WS_URL || '').trim().replace(/\/+$/, '')
+  const rawApi = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
+
+  const pick = rawWs || rawApi
+  if (!pick) return 'ws://localhost:8000'
+
+  if (pick.startsWith('ws://') || pick.startsWith('wss://')) return pick
+  if (pick.startsWith('https://')) return `wss://${pick.slice('https://'.length)}`
+  if (pick.startsWith('http://')) return `ws://${pick.slice('http://'.length)}`
+  return `wss://${pick}`
+}
+
+const WS_BASE = normalizeWsBase()
 
 export class ConversationSocket {
   private ws: WebSocket | null = null
   private handlers: Map<string, MessageHandler[]> = new Map()
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
   private sessionId: string
 
   constructor(sessionId: string) {
@@ -27,6 +41,7 @@ export class ConversationSocket {
 
       this.ws.onopen = () => {
         console.log('[WS] Connected')
+        this.startHeartbeat()
         resolve()
       }
 
@@ -36,6 +51,7 @@ export class ConversationSocket {
       }
 
       this.ws.onclose = (e) => {
+        this.stopHeartbeat()
         console.log('[WS] Closed', e.code, e.reason)
         this.emit({ type: 'disconnected', data: { code: e.code } })
       }
@@ -99,6 +115,7 @@ export class ConversationSocket {
       this.ws.close()
       this.ws = null
     }
+    this.stopHeartbeat()
     this.handlers.clear()
   }
 
@@ -114,5 +131,19 @@ export class ConversationSocket {
     // Also call wildcard handlers
     const wildcards = this.handlers.get('*') || []
     wildcards.forEach((h) => h(msg))
+  }
+
+  private startHeartbeat() {
+    this.stopHeartbeat()
+    this.heartbeatTimer = setInterval(() => {
+      this.send('get_status', {})
+    }, 7000)
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = null
+    }
   }
 }
