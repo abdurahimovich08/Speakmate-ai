@@ -16,6 +16,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any
 import re
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Header
 from pydantic import BaseModel, Field
@@ -27,6 +28,7 @@ from app.services.coach_engine import coach_engine
 from app.workers.queue_config import queue_manager
 
 router = APIRouter(prefix="/coach", tags=["coach"])
+logger = logging.getLogger(__name__)
 
 
 class MissionCompletionRequest(BaseModel):
@@ -92,6 +94,13 @@ def _count_fillers(text: str) -> int:
         else:
             count += len(re.findall(rf"\b{re.escape(phrase)}\b", lowered))
     return count
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _validate_cron_secret(header_secret: Optional[str]) -> None:
@@ -226,7 +235,7 @@ async def _build_session_metrics(
         word_count = _count_words(joined_text)
         filler_count = _count_fillers(joined_text)
 
-        duration_seconds = int(session.get("duration_seconds") or 0)
+        duration_seconds = _safe_int(session.get("duration_seconds"), 0)
         duration_minutes = max(duration_seconds / 60.0, 1e-6)
         wpm = round(word_count / duration_minutes, 2) if duration_seconds > 0 else float(word_count)
         filler_rate = round((filler_count / max(word_count, 1)) * 100, 2)
@@ -611,52 +620,67 @@ async def get_behavior_insights(
     days: int = Query(30, ge=7, le=180),
     current_user: dict = Depends(get_current_user),
 ):
-    profile = await _ensure_user_profile(current_user)
-    preferences = _preferences(profile)
-    coach_state = preferences.get("coach", {}) if isinstance(preferences, dict) else {}
-    mission_history = _normalize_mission_history(coach_state.get("mission_history", []))
+    try:
+        profile = await _ensure_user_profile(current_user)
+        preferences = _preferences(profile)
+        coach_state = preferences.get("coach", {}) if isinstance(preferences, dict) else {}
+        mission_history = _normalize_mission_history(coach_state.get("mission_history", []))
 
-    sessions = await db_service.get_user_sessions(current_user["user_id"], limit=100)
-    sessions = _filter_sessions_by_days(sessions, days)
-    session_ids = [str(s["id"]) for s in sessions if s.get("id")]
-    errors = await _fetch_error_rows(session_ids)
-    errors_by_session: dict[str, list[dict]] = defaultdict(list)
-    for error in errors:
-        sid = str(error.get("session_id") or "")
-        if sid:
-            errors_by_session[sid].append(error)
+        sessions = await db_service.get_user_sessions(current_user["user_id"], limit=100)
+        sessions = _filter_sessions_by_days(sessions, days)
+        session_ids = [str(s["id"]) for s in sessions if s.get("id")]
+        errors = await _fetch_error_rows(session_ids)
+        errors_by_session: dict[str, list[dict]] = defaultdict(list)
+        for error in errors:
+            sid = str(error.get("session_id") or "")
+            if sid:
+                errors_by_session[sid].append(error)
 
-    assets_map = await _fetch_assets_map(current_user["user_id"], session_ids)
-    metrics = await _build_session_metrics(sessions, errors_by_session, assets_map)
-    progress_proof = coach_engine.build_progress_proof(metrics)
-    insights = coach_engine.build_behavior_insights(sessions, mission_history, progress_proof)
+        assets_map = await _fetch_assets_map(current_user["user_id"], session_ids)
+        metrics = await _build_session_metrics(sessions, errors_by_session, assets_map)
+        progress_proof = coach_engine.build_progress_proof(metrics)
+        insights = coach_engine.build_behavior_insights(sessions, mission_history, progress_proof)
 
-    completion_rate = None
-    if mission_history:
-        recent = mission_history[-14:]
-        recent_scores = []
-        for item in recent:
-            try:
-                recent_scores.append(float(item.get("success_rate", 0.0)))
-            except (TypeError, ValueError):
-                recent_scores.append(0.0)
-        completion_rate = round(
-            sum(recent_scores) / max(len(recent_scores), 1),
-            2,
-        )
+        completion_rate = None
+        if mission_history:
+            recent = mission_history[-14:]
+            recent_scores = []
+            for item in recent:
+                try:
+                    recent_scores.append(float(item.get("success_rate", 0.0)))
+                except (TypeError, ValueError):
+                    recent_scores.append(0.0)
+            completion_rate = round(
+                sum(recent_scores) / max(len(recent_scores), 1),
+                2,
+            )
 
-    if insights.get("insights"):
-        await db_service.save_behavior_event(
-            user_id=current_user["user_id"],
-            event_type="insight_generated",
-            payload={"top_risk": insights["insights"][0].get("risk"), "days": days},
-        )
+        if insights.get("insights"):
+            await db_service.save_behavior_event(
+                user_id=current_user["user_id"],
+                event_type="insight_generated",
+                payload={"top_risk": insights["insights"][0].get("risk"), "days": days},
+            )
 
-    return {
-        "insights": insights.get("insights", []),
-        "mission_completion_rate": completion_rate,
-        "what_am_i_not_seeing_prompt": "Which user friction appears before a practice drop?",
-    }
+        return {
+            "insights": insights.get("insights", []),
+            "mission_completion_rate": completion_rate,
+            "what_am_i_not_seeing_prompt": "Which user friction appears before a practice drop?",
+        }
+    except Exception as exc:
+        logger.warning("Behavior insights fallback triggered: %s", exc)
+        # Keep coach page responsive even if analytics pipeline has transient issues.
+        return {
+            "insights": [
+                {
+                    "risk": "analytics_unavailable",
+                    "what_am_i_not_seeing": "Insights are temporarily unavailable while backend catches up.",
+                    "action": "Run one more short practice and refresh in 1-2 minutes.",
+                }
+            ],
+            "mission_completion_rate": None,
+            "what_am_i_not_seeing_prompt": "Which user friction appears before a practice drop?",
+        }
 
 
 @router.post("/notifications/daily-reminders/run")

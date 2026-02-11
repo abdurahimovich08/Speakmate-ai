@@ -17,24 +17,31 @@ import History from './pages/History'
 import Profile from './pages/Profile'
 
 export default function App() {
-  const { login, loading, error, token } = useAuthStore()
+  const { login, loading, error, token, hydrated } = useAuthStore()
   const [initError, setInitError] = useState<string | null>(null)
 
   useEffect(() => {
     telegramService.init()
+  }, [])
 
-    if (!token) {
-      if (telegramService.isAvailable && telegramService.initData) {
-        login()
-      } else {
-        setInitError(
-          'This app should be opened inside Telegram. Open @SpeakMateBot and tap Open SpeakMate.',
-        )
-      }
+  useEffect(() => {
+    if (!hydrated) return
+
+    if (token) {
+      if (initError) setInitError(null)
+      return
     }
-  }, [token, login])
 
-  if (loading) {
+    if (telegramService.isAvailable && telegramService.initData) {
+      login()
+    } else {
+      setInitError(
+        'This app should be opened inside Telegram. Open @SpeakMateBot and tap Open SpeakMate.',
+      )
+    }
+  }, [hydrated, token, login, initError])
+
+  if (!hydrated || loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-sm-bg text-sm-text font-ui">
         <p className="text-xl font-semibold font-display">SpeakMate</p>

@@ -6,6 +6,30 @@ import type { Session, UserProfile, ConversationTurn, DetectedError, SessionFeed
 import { useAuthStore } from '../stores/authStore'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 12000)
+const MAX_RETRIES = 1
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError'
+}
+
+function shouldRetryStatus(status: number): boolean {
+  return [408, 425, 429, 500, 502, 503, 504].includes(status)
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token
@@ -17,13 +41,34 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE}${path}`, { ...options, headers }, REQUEST_TIMEOUT_MS)
+      const body = await res.json().catch(() => null)
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.detail || body.message || `HTTP ${res.status}`)
+      if (!res.ok) {
+        if (attempt < MAX_RETRIES && shouldRetryStatus(res.status)) {
+          await sleep(350 * (attempt + 1))
+          continue
+        }
+        throw new Error(body?.detail || body?.message || `HTTP ${res.status}`)
+      }
+      return (body ?? ({} as T)) as T
+    } catch (err) {
+      const retryable = err instanceof TypeError || isAbortError(err)
+      if (attempt < MAX_RETRIES && retryable) {
+        await sleep(350 * (attempt + 1))
+        continue
+      }
+      if (isAbortError(err)) {
+        throw new Error('Request timed out. Backend is likely waking up, retry in a moment.')
+      }
+      if (err instanceof Error) throw err
+      throw new Error('Network request failed')
+    }
   }
-  return res.json()
+
+  throw new Error('Request failed')
 }
 
 // ---- Auth ----

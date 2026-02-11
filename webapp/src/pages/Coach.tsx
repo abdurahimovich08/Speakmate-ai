@@ -95,34 +95,60 @@ export default function Coach() {
   const loadDashboard = async () => {
     setLoading(true)
     setError(null)
-    try {
-      const [m, d, sg, pp, mem, ins, sp, sc] = await Promise.all([
-        getDailyMission(),
-        getMnemonicDrills(5),
-        getCoachSkillGraph(),
-        getCoachProgressProof(30),
-        getCoachMemory(),
-        getCoachInsights(30),
-        getSpeakFirstPlan(comfortMode),
-        getShareCard(30),
-      ])
+    const primary = await Promise.allSettled([
+      getDailyMission(),
+      getMnemonicDrills(5),
+      getCoachSkillGraph(),
+      getCoachProgressProof(30),
+    ])
 
-      setMission(asDailyMission(m))
-      setDrills(((d.drills as unknown[]) || []) as MnemonicDrill[])
-      setSkillGraph(asSkillGraph(sg))
-      setProof(asProgressProof(pp))
-      setMemory(asCoachMemory(mem))
-      setInsights(((ins.insights as unknown[]) || []) as BehaviorInsight[])
-      setSpeakFirst(sp as unknown as SpeakFirstPlan)
-      setShareCard((sc.card as Record<string, unknown>) || null)
-      setGoalsInput((mem.goals as string[] | undefined)?.join('; ') || '')
-      setNotesInput((mem.notes as string | undefined) || '')
+    const [missionRes, drillsRes, skillRes, proofRes] = primary
+
+    if (missionRes.status === 'fulfilled') {
+      setMission(asDailyMission(missionRes.value))
       setCompleted([])
-    } catch (e) {
-      console.error(e)
-      setError('Could not load Super Coach. Check backend + CORS settings, then retry.')
-    } finally {
-      setLoading(false)
+    }
+    if (drillsRes.status === 'fulfilled') {
+      setDrills((((drillsRes.value as Record<string, unknown>).drills as unknown[]) || []) as MnemonicDrill[])
+    }
+    if (skillRes.status === 'fulfilled') {
+      setSkillGraph(asSkillGraph(skillRes.value))
+    }
+    if (proofRes.status === 'fulfilled') {
+      setProof(asProgressProof(proofRes.value))
+    }
+
+    const failedPrimary = primary.filter((r) => r.status === 'rejected').length
+    if (failedPrimary === primary.length) {
+      setError('Super Coach load failed. Backend is likely waking up, please retry.')
+    } else if (failedPrimary > 0) {
+      setError('Some coach blocks failed to load. Pull to refresh in a few seconds.')
+    }
+
+    setLoading(false)
+
+    const secondary = await Promise.allSettled([
+      getCoachMemory(),
+      getCoachInsights(30),
+      getSpeakFirstPlan(comfortMode),
+      getShareCard(30),
+    ])
+
+    const [memoryRes, insightsRes, speakRes, shareRes] = secondary
+    if (memoryRes.status === 'fulfilled') {
+      const memoryPayload = asCoachMemory(memoryRes.value)
+      setMemory(memoryPayload)
+      setGoalsInput(((memoryRes.value.goals as string[] | undefined) || []).join('; '))
+      setNotesInput((memoryRes.value.notes as string | undefined) || '')
+    }
+    if (insightsRes.status === 'fulfilled') {
+      setInsights(((((insightsRes.value as Record<string, unknown>).insights as unknown[]) || []) as BehaviorInsight[]))
+    }
+    if (speakRes.status === 'fulfilled') {
+      setSpeakFirst(speakRes.value as unknown as SpeakFirstPlan)
+    }
+    if (shareRes.status === 'fulfilled') {
+      setShareCard(((shareRes.value as Record<string, unknown>).card as Record<string, unknown>) || null)
     }
   }
 
