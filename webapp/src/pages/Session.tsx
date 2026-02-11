@@ -91,6 +91,7 @@ export default function Session() {
   } = useAudio()
 
   const [recordSeconds, setRecordSeconds] = useState(0)
+  const [micArmed, setMicArmed] = useState(false)
   const recordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const stoppingRef = useRef(false)
   const feedRef = useRef<HTMLDivElement | null>(null)
@@ -124,6 +125,12 @@ export default function Session() {
   useEffect(() => {
     telegramService.webapp?.enableClosingConfirmation()
     return () => telegramService.webapp?.disableClosingConfirmation()
+  }, [])
+
+  useEffect(() => {
+    // Prevent "ghost tap" after navigation from Practice -> Session.
+    const timer = setTimeout(() => setMicArmed(true), 800)
+    return () => clearTimeout(timer)
   }, [])
 
   useEffect(() => {
@@ -178,7 +185,8 @@ export default function Session() {
 
   const handleToggleMic = useCallback(async () => {
     if (!isSupported || isEnding) return
-    if (!isConnected) return
+    if (!micArmed) return
+    if (!isConnected && !recording) return
 
     try {
       if (recording) {
@@ -196,7 +204,7 @@ export default function Session() {
       console.error(err)
       telegramService.hapticNotification('error')
     }
-  }, [isSupported, isEnding, isConnected, recording, startRecording, stopRecording, autoFinishAfterTake, endSession])
+  }, [isSupported, isEnding, isConnected, recording, micArmed, startRecording, stopRecording, autoFinishAfterTake, endSession])
 
   if (!session) {
     return (
@@ -227,7 +235,9 @@ export default function Session() {
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0')
   const ss = String(remaining % 60).padStart(2, '0')
 
-  const micLabel = !isSupported
+  const micLabel = !micArmed
+    ? 'Preparing mic...'
+    : !isSupported
     ? 'Mic not supported'
     : permissionGranted === false
       ? 'Mic blocked'
@@ -305,7 +315,7 @@ export default function Session() {
                 ? 'linear-gradient(90deg, var(--sm-accent), var(--sm-energy-2), var(--sm-energy))'
                 : 'var(--sm-card-2)',
             }}
-            disabled={isEnding || !isSupported || !isConnected}
+            disabled={isEnding || !isSupported || !micArmed || (!isConnected && !recording)}
             onClick={handleToggleMic}
           >
             <div className="flex items-center justify-between gap-3">

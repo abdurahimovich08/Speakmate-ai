@@ -8,6 +8,7 @@ import { useSessionStore } from '../stores/sessionStore'
 
 export function useAudio() {
   const recorderRef = useRef<AudioRecorder | null>(null)
+  const startingRef = useRef(false)
   const [recording, setRecording] = useState(false)
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null)
   const socket = useSessionStore((s) => s.socket)
@@ -23,22 +24,34 @@ export function useAudio() {
   }, [])
 
   const startRecording = useCallback(async () => {
-    if (!socket) return
-
-    const ok = await checkPermission()
-    if (!ok) return
+    if (!socket || recording || startingRef.current) return
+    startingRef.current = true
 
     const recorder = new AudioRecorder((base64, isFinal, mimeType) => {
       socket.sendAudioChunk(base64, isFinal, mimeType)
     }, 0)
 
-    await recorder.start()
-    recorderRef.current = recorder
-    setRecording(true)
-    useSessionStore.getState().setRecording(true)
-  }, [socket, checkPermission])
+    try {
+      // Single getUserMedia request is performed inside recorder.start().
+      // This avoids double permission prompts in Telegram WebView.
+      await recorder.start()
+      recorderRef.current = recorder
+      setPermissionGranted(true)
+      setRecording(true)
+      useSessionStore.getState().setRecording(true)
+    } catch {
+      setPermissionGranted(false)
+      recorderRef.current = null
+      setRecording(false)
+      useSessionStore.getState().setRecording(false)
+      throw new Error('Microphone access denied or unavailable')
+    } finally {
+      startingRef.current = false
+    }
+  }, [socket, recording])
 
   const stopRecording = useCallback(async () => {
+    if (startingRef.current) return
     await recorderRef.current?.stop()
     recorderRef.current = null
     setRecording(false)
