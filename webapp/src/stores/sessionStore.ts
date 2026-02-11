@@ -119,17 +119,21 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       })
     })
 
-    socket.on('disconnected', () => {
+    socket.on('disconnected', (msg) => {
       set({ isConnected: false })
 
       const state = get()
       if (state.isEnding) return
       if (state.socket !== socket) return
+      const code = Number((msg.data as Record<string, unknown> | undefined)?.code ?? 0)
+      if (code === 1008) return // auth/session ownership issue; don't loop-retry
       if (reconnectAttempts >= 3) return
 
       reconnectAttempts += 1
-      const delay = 800 * reconnectAttempts
+      if (socket.isConnected || socket.isConnecting) return
+      const delay = 1200 * reconnectAttempts
       reconnectTimer = setTimeout(async () => {
+        if (socket.isConnected || socket.isConnecting) return
         try {
           await socket.connect()
         } catch {

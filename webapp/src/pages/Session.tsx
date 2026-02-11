@@ -92,6 +92,7 @@ export default function Session() {
 
   const [recordSeconds, setRecordSeconds] = useState(0)
   const [micArmed, setMicArmed] = useState(false)
+  const [offlineSince, setOfflineSince] = useState<number | null>(null)
   const recordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const stoppingRef = useRef(false)
   const feedRef = useRef<HTMLDivElement | null>(null)
@@ -136,6 +137,14 @@ export default function Session() {
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' })
   }, [visibleMessages.length, currentTranscription])
+
+  useEffect(() => {
+    if (isConnected) {
+      setOfflineSince(null)
+    } else if (offlineSince === null) {
+      setOfflineSince(Date.now())
+    }
+  }, [isConnected, offlineSince])
 
   useEffect(() => {
     if (!recording) {
@@ -341,7 +350,8 @@ export default function Session() {
 
           {isSupported && !isConnected && (
             <p className="text-xs text-sm-danger mt-3">
-              WebSocket offline. Wait for reconnect, then try again.
+              WebSocket offline. Waiting reconnect...
+              {offlineSince && Date.now() - offlineSince > 8000 ? ' If this continues, check VITE_WS_URL in Vercel.' : ''}
             </p>
           )}
         </div>

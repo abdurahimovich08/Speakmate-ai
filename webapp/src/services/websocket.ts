@@ -14,10 +14,22 @@ function normalizeWsBase(): string {
   const pick = rawWs || rawApi
   if (!pick) return 'ws://localhost:8000'
 
-  if (pick.startsWith('ws://') || pick.startsWith('wss://')) return pick
-  if (pick.startsWith('https://')) return `wss://${pick.slice('https://'.length)}`
-  if (pick.startsWith('http://')) return `ws://${pick.slice('http://'.length)}`
-  return `wss://${pick}`
+  const withScheme =
+    pick.startsWith('ws://') ||
+    pick.startsWith('wss://') ||
+    pick.startsWith('http://') ||
+    pick.startsWith('https://')
+      ? pick
+      : `https://${pick}`
+
+  try {
+    const parsed = new URL(withScheme)
+    const secure = parsed.protocol === 'https:' || parsed.protocol === 'wss:'
+    return `${secure ? 'wss' : 'ws'}://${parsed.host}`
+  } catch {
+    const cleaned = withScheme.replace(/^[a-z]+:\/\//i, '').split('/')[0]
+    return `wss://${cleaned}`
+  }
 }
 
 const WS_BASE = normalizeWsBase()
@@ -26,6 +38,7 @@ export class ConversationSocket {
   private ws: WebSocket | null = null
   private handlers: Map<string, MessageHandler[]> = new Map()
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  private connectPromise: Promise<void> | null = null
   private sessionId: string
 
   constructor(sessionId: string) {
@@ -33,30 +46,45 @@ export class ConversationSocket {
   }
 
   connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      return Promise.resolve()
+    }
+    if (this.connectPromise) {
+      return this.connectPromise
+    }
+
+    this.connectPromise = new Promise((resolve, reject) => {
       const token = useAuthStore.getState().token || ''
-      const url = `${WS_BASE}/ws/conversation/${this.sessionId}?token=${token}`
+      const url = `${WS_BASE}/ws/conversation/${this.sessionId}?token=${encodeURIComponent(token)}`
+      const ws = new WebSocket(url)
+      this.ws = ws
 
-      this.ws = new WebSocket(url)
-
-      this.ws.onopen = () => {
+      ws.onopen = () => {
+        if (this.ws !== ws) return
         console.log('[WS] Connected')
         this.startHeartbeat()
+        this.connectPromise = null
         resolve()
       }
 
-      this.ws.onerror = (e) => {
+      ws.onerror = (e) => {
+        if (this.ws !== ws) return
         console.error('[WS] Error', e)
+        this.connectPromise = null
         reject(e)
       }
 
-      this.ws.onclose = (e) => {
+      ws.onclose = (e) => {
+        if (this.ws !== ws) return
+        this.connectPromise = null
         this.stopHeartbeat()
+        this.ws = null
         console.log('[WS] Closed', e.code, e.reason)
         this.emit({ type: 'disconnected', data: { code: e.code } })
       }
 
-      this.ws.onmessage = (event) => {
+      ws.onmessage = (event) => {
+        if (this.ws !== ws) return
         try {
           const msg: WSMessage = JSON.parse(event.data)
           this.emit(msg)
@@ -65,6 +93,11 @@ export class ConversationSocket {
         }
       }
     })
+    return this.connectPromise
+  }
+
+  get isConnecting(): boolean {
+    return this.ws?.readyState === WebSocket.CONNECTING || !!this.connectPromise
   }
 
   /** Send a typed message to the server */
