@@ -17,6 +17,7 @@ from app.services.ielts_scorer_production import IELTSScorerProduction, ielts_sc
 from app.services.training_engine import TrainingEngine, training_engine
 from app.services.prompt_manager import PromptManager, prompt_manager
 from app.services.analysis_coordinator import AnalysisCoordinator, analysis_coordinator
+from app.services.criterion_feedback import CriterionFeedbackGenerator, criterion_feedback_generator
 from app.services.quota_service import QuotaService
 
 __all__ = [
@@ -30,5 +31,7 @@ __all__ = [
     "prompt_manager",
     "AnalysisCoordinator",
     "analysis_coordinator",
-    "QuotaService"
+    "CriterionFeedbackGenerator",
+    "criterion_feedback_generator",
+    "QuotaService",
 ]

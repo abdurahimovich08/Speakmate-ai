@@ -180,6 +180,65 @@ export interface SessionFeedback {
   strengths?: string[]
 }
 
+// ---- Criterion Feedback (per-criterion detailed analysis) ----
+export interface CriterionWeakness {
+  issue: string
+  example: string
+  fix: string
+  rule?: string
+}
+
+export interface CriterionFeedback {
+  score_explanation: string
+  strengths: string[]
+  weaknesses: CriterionWeakness[]
+  tips: string[]
+  metrics_summary: string
+}
+
+export interface FullCriterionFeedback {
+  fluency_coherence: CriterionFeedback
+  lexical_resource: CriterionFeedback
+  grammatical_range: CriterionFeedback
+  pronunciation: CriterionFeedback
+  overall_strengths: string[]
+  corrected_sample: string
+}
+
+// ---- Computed Metrics ----
+export interface FluencyMetrics {
+  word_count: number
+  sentence_count: number
+  avg_sentence_length: number
+  discourse_markers: number
+  filler_count: number
+  filler_density: number
+  self_correction_count: number
+}
+
+export interface LexicalMetrics {
+  word_count: number
+  unique_word_count: number
+  ttr: number
+  basic_word_ratio: number
+  advanced_word_ratio: number
+  advanced_words: string[]
+  collocation_count: number
+  idiom_count: number
+}
+
+export interface GrammarMetrics {
+  sentence_count: number
+  simple_sentences: number
+  compound_sentences: number
+  complex_sentences: number
+  structure_variety_ratio: number
+  tenses_used: string[]
+  tense_variety: number
+  complex_features: string[]
+  complex_feature_count: number
+}
+
 // ---- Telegram ----
 export interface TelegramUser {
   id: number

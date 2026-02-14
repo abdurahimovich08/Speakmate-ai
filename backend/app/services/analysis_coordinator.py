@@ -14,6 +14,7 @@ import uuid
 from app.services.hybrid_analyzer import HybridErrorAnalyzer
 from app.services.pronunciation_engine import PronunciationAnalyzer
 from app.services.ielts_scorer_production import ielts_scorer
+from app.services.criterion_feedback import criterion_feedback_generator
 from app.workers.queue_config import QueueManager
 from app.db.supabase import db_service
 
@@ -195,6 +196,21 @@ class AnalysisCoordinator:
                 mode=mode
             )
             
+            # Generate per-criterion detailed feedback
+            try:
+                criterion_feedback = await criterion_feedback_generator.generate(
+                    transcription=transcription,
+                    errors=errors,
+                    fluency_metrics=fluency_metrics,
+                    lexical_metrics=lexical_metrics,
+                    grammar_metrics=grammar_metrics,
+                    scores=scores,
+                    pronunciation=pronunciation_result,
+                )
+            except Exception as e:
+                logger.warning(f"Criterion feedback generation failed: {e}")
+                criterion_feedback = {}
+
             # Generate detailed recommendations
             recommendations = self._generate_recommendations(errors, scores)
             
@@ -218,6 +234,7 @@ class AnalysisCoordinator:
                 "fluency_metrics": fluency_metrics,
                 "lexical_metrics": lexical_metrics,
                 "grammar_metrics": grammar_metrics,
+                "criterion_feedback": criterion_feedback,
                 "recommendations": recommendations,
                 "training_plan": training_plan
             }

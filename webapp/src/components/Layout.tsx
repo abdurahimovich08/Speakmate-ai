@@ -1,8 +1,10 @@
 /* ===========================
-   Layout - Telegram-theme-aware shell with tab navigation
+   Layout - Telegram-theme-aware shell with animated tab navigation
    =========================== */
 
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { useGamificationStore } from '../stores/gamificationStore'
 
 const tabs = [
   { to: '/', label: 'Home', Icon: HomeIcon },
@@ -13,6 +15,13 @@ const tabs = [
 ]
 
 export default function Layout() {
+  const location = useLocation()
+  const streak = useGamificationStore((s) => s.streak)
+
+  const activeIndex = tabs.findIndex((t) =>
+    t.to === '/' ? location.pathname === '/' : location.pathname.startsWith(t.to),
+  )
+
   return (
     <div className="flex flex-col min-h-screen bg-sm-bg text-sm-text font-ui">
       <main className="flex-1 pb-24 overflow-y-auto">
@@ -20,7 +29,17 @@ export default function Layout() {
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 px-3 sm-safe-bottom">
-        <div className="mx-auto max-w-md sm-nav border border-sm-border shadow-smglow rounded-smxl">
+        <div className="mx-auto max-w-md sm-nav border border-sm-border shadow-smglow rounded-smxl relative">
+          {/* Animated active indicator */}
+          {activeIndex >= 0 && (
+            <motion.div
+              className="absolute top-0 h-[3px] rounded-full bg-sm-accent"
+              style={{ width: `${100 / tabs.length}%` }}
+              animate={{ x: `${activeIndex * 100}%` }}
+              transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+            />
+          )}
+
           <div className="grid grid-cols-5">
             {tabs.map((tab) => (
               <NavLink
@@ -34,19 +53,24 @@ export default function Layout() {
                 }
               >
                 {({ isActive }) => (
-                  <>
+                  <motion.div
+                    className="flex flex-col items-center"
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                  >
                     <span
                       className={`mb-1 inline-flex h-10 w-10 items-center justify-center rounded-2xl transition-transform ${
                         isActive ? 'bg-sm-card2 scale-[1.02]' : 'bg-transparent'
                       }`}
                     >
                       <tab.Icon active={isActive} />
+                      {/* Streak fire on Home tab */}
+                      {tab.to === '/' && streak && streak.current_streak > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 text-[10px]">🔥</span>
+                      )}
                     </span>
                     <span className="font-medium tracking-tight">{tab.label}</span>
-                    {isActive && (
-                      <span className="absolute top-1.5 h-1.5 w-1.5 rounded-full bg-sm-accent" />
-                    )}
-                  </>
+                  </motion.div>
                 )}
               </NavLink>
             ))}

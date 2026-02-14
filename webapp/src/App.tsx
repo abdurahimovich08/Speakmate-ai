@@ -1,9 +1,10 @@
 /* ===========================
-   App - Root component with routing and Telegram init
+   App - Root component with routing, Telegram init, page transitions
    =========================== */
 
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { telegramService } from './services/telegram'
 import { useAuthStore } from './stores/authStore'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -20,10 +21,38 @@ const Session = lazy(() => import('./pages/Session'))
 const Results = lazy(() => import('./pages/Results'))
 const History = lazy(() => import('./pages/History'))
 const Profile = lazy(() => import('./pages/Profile'))
+const Onboarding = lazy(() => import('./pages/Onboarding'))
+
+const pageVariants = {
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -8 },
+}
+
+const pageTransition = {
+  type: 'tween' as const,
+  ease: 'easeOut' as const,
+  duration: 0.22,
+}
+
+function PageWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <motion.div
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      transition={pageTransition}
+    >
+      {children}
+    </motion.div>
+  )
+}
 
 export default function App() {
   const { login, loading, error, token, hydrated } = useAuthStore()
   const [initError, setInitError] = useState<string | null>(null)
+  const location = useLocation()
 
   useEffect(() => {
     telegramService.init()
@@ -49,8 +78,23 @@ export default function App() {
   if (!hydrated || loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-sm-bg text-sm-text font-ui">
-        <p className="text-xl font-semibold font-display">SpeakMate</p>
-        <p className="text-sm text-sm-muted mt-2">Loading your coach...</p>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4 }}
+          className="text-center"
+        >
+          <p className="text-xl font-semibold font-display">SpeakMate</p>
+          <p className="text-sm text-sm-muted mt-2">Loading your coach...</p>
+          <div className="mt-4 h-1 w-24 mx-auto rounded-full bg-sm-card2 overflow-hidden">
+            <motion.div
+              className="h-full rounded-full bg-sm-accent"
+              initial={{ width: '0%' }}
+              animate={{ width: '80%' }}
+              transition={{ duration: 2, ease: 'easeInOut' }}
+            />
+          </div>
+        </motion.div>
       </div>
     )
   }
@@ -72,34 +116,62 @@ export default function App() {
     )
   }
 
+  // Check onboarding
+  const onboardingDone = localStorage.getItem('sm_onboarding_done')
+
   return (
     <ToastProvider>
       <ErrorBoundary>
         <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-sm-bg"><CoachSkeleton /></div>}>
-          <Routes>
-            <Route path="/session/active" element={
-              <ErrorBoundary><Session /></ErrorBoundary>
-            } />
+          <AnimatePresence mode="wait">
+            <Routes location={location} key={location.pathname}>
+              {/* Onboarding */}
+              {!onboardingDone && (
+                <Route path="*" element={
+                  <PageWrapper><Onboarding /></PageWrapper>
+                } />
+              )}
 
-            <Route element={<Layout />}>
-              <Route path="/" element={<Home />} />
-              <Route path="/coach" element={
-                <ErrorBoundary fallback={<CoachSkeleton />}><Coach /></ErrorBoundary>
+              <Route path="/onboarding" element={
+                <PageWrapper><Onboarding /></PageWrapper>
               } />
-              <Route path="/practice" element={
-                <ErrorBoundary><Practice /></ErrorBoundary>
+
+              <Route path="/session/active" element={
+                <ErrorBoundary><Session /></ErrorBoundary>
               } />
-              <Route path="/history" element={
-                <ErrorBoundary><History /></ErrorBoundary>
-              } />
-              <Route path="/profile" element={
-                <ErrorBoundary><Profile /></ErrorBoundary>
-              } />
-              <Route path="/results/:id" element={
-                <ErrorBoundary fallback={<ScoreCardSkeleton />}><Results /></ErrorBoundary>
-              } />
-            </Route>
-          </Routes>
+
+              <Route element={<Layout />}>
+                <Route path="/" element={
+                  <PageWrapper><Home /></PageWrapper>
+                } />
+                <Route path="/coach" element={
+                  <ErrorBoundary fallback={<CoachSkeleton />}>
+                    <PageWrapper><Coach /></PageWrapper>
+                  </ErrorBoundary>
+                } />
+                <Route path="/practice" element={
+                  <ErrorBoundary>
+                    <PageWrapper><Practice /></PageWrapper>
+                  </ErrorBoundary>
+                } />
+                <Route path="/history" element={
+                  <ErrorBoundary>
+                    <PageWrapper><History /></PageWrapper>
+                  </ErrorBoundary>
+                } />
+                <Route path="/profile" element={
+                  <ErrorBoundary>
+                    <PageWrapper><Profile /></PageWrapper>
+                  </ErrorBoundary>
+                } />
+                <Route path="/results/:id" element={
+                  <ErrorBoundary fallback={<ScoreCardSkeleton />}>
+                    <PageWrapper><Results /></PageWrapper>
+                  </ErrorBoundary>
+                } />
+              </Route>
+            </Routes>
+          </AnimatePresence>
         </Suspense>
       </ErrorBoundary>
     </ToastProvider>

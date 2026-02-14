@@ -124,6 +124,11 @@ export async function getSessionFeedback(sessionId: string) {
   return request<SessionFeedback>(`/api/v1/feedback/${sessionId}`)
 }
 
+// ---- Analysis (detailed) ----
+export async function getSessionAnalysis(sessionId: string) {
+  return request<Record<string, unknown>>(`/api/v1/analysis/sessions/${sessionId}`)
+}
+
 // ---- Super Coach ----
 export async function getDailyMission() {
   return request<Record<string, unknown>>('/api/v1/coach/daily-mission')
@@ -215,4 +220,17 @@ export async function getPublicDiagnosis(transcript: string) {
     method: 'POST',
     body: JSON.stringify({ transcript }),
   })
+}
+
+// ---- Gamification ----
+export async function getStreakData() {
+  return request<Record<string, unknown>>('/api/v1/gamification/streak')
+}
+
+export async function getSessionHistory(days = 30) {
+  return request<Record<string, unknown>>(`/api/v1/gamification/history?days=${days}`)
+}
+
+export async function getAchievements() {
+  return request<Record<string, unknown>[]>('/api/v1/gamification/achievements')
 }

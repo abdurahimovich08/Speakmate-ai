@@ -17,7 +17,7 @@ import sys
 from app.core.config import settings
 from app.core.exceptions import SpeakMateError
 from app.api.routes import users, sessions, feedback, auth
-from app.api.routes import training, analysis, coach
+from app.api.routes import training, analysis, coach, gamification
 from app.api.websocket.conversation import router as ws_router
 from app.middleware.security import (
     RateLimitMiddleware,
@@ -225,6 +225,7 @@ app.include_router(feedback.router, prefix="/api/v1", tags=["feedback"])
 app.include_router(training.router, prefix="/api/v1", tags=["training"])
 app.include_router(analysis.router, prefix="/api/v1", tags=["analysis"])
 app.include_router(coach.router, prefix="/api/v1", tags=["coach"])
+app.include_router(gamification.router, prefix="/api/v1", tags=["gamification"])
 app.include_router(ws_router, tags=["websocket"])
 if telegram_router is not None:
     app.include_router(telegram_router, tags=["telegram"])

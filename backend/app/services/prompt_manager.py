@@ -252,6 +252,100 @@ Keep tone supportive and motivating. Don't be generic.""",
             max_tokens=150
         ))
         
+        # ---- Criterion Feedback prompt (comprehensive per-criterion analysis) ----
+        self._register_prompt(PromptConfig(
+            key="feedback.criterion_analysis",
+            version="v1",
+            template="""You are an expert IELTS speaking examiner and English language coach.
+Analyze this IELTS speaking response and produce a DETAILED per-criterion feedback report.
+
+=== TRANSCRIPTION ===
+"{transcription}"
+
+=== DETECTED ERRORS (grouped by category) ===
+{error_summary}
+
+=== COMPUTED METRICS ===
+Fluency metrics: {fluency_metrics}
+Lexical metrics: {lexical_metrics}
+Grammar metrics: {grammar_metrics}
+
+=== CURRENT SCORES ===
+{scores}
+
+=== PRONUNCIATION DATA ===
+{pronunciation_data}
+
+=== INSTRUCTIONS ===
+Generate a comprehensive JSON feedback report. For EACH of the 4 IELTS criteria, provide:
+1. score_explanation: 2-3 sentences explaining WHY this score was given, referencing specific parts of the transcript
+2. strengths: 2-4 specific things the speaker did well (cite actual phrases from transcript)
+3. weaknesses: 2-4 specific issues, each with:
+   - issue: what the problem is
+   - example: the exact phrase from transcript that shows the problem
+   - fix: the corrected version with explanation
+   - rule: the grammar/vocabulary/fluency rule being violated (if applicable)
+4. tips: 3-5 actionable, specific improvement tips (not generic advice)
+5. metrics_summary: one-line summary of key metrics for this criterion
+
+Also provide:
+- overall_strengths: 3-5 things the speaker does well across all criteria
+- corrected_sample: Rewrite 2-3 sentences from the transcript showing how they SHOULD sound at Band 7+. Keep the same meaning but fix all errors and improve vocabulary/grammar.
+
+Return ONLY valid JSON in this exact structure:
+{{
+  "fluency_coherence": {{
+    "score_explanation": "...",
+    "strengths": ["...", "..."],
+    "weaknesses": [
+      {{"issue": "...", "example": "...", "fix": "...", "rule": "..."}}
+    ],
+    "tips": ["...", "..."],
+    "metrics_summary": "..."
+  }},
+  "lexical_resource": {{
+    "score_explanation": "...",
+    "strengths": ["...", "..."],
+    "weaknesses": [
+      {{"issue": "...", "example": "...", "fix": "...", "rule": "..."}}
+    ],
+    "tips": ["...", "..."],
+    "metrics_summary": "..."
+  }},
+  "grammatical_range": {{
+    "score_explanation": "...",
+    "strengths": ["...", "..."],
+    "weaknesses": [
+      {{"issue": "...", "example": "...", "fix": "...", "rule": "..."}}
+    ],
+    "tips": ["...", "..."],
+    "metrics_summary": "..."
+  }},
+  "pronunciation": {{
+    "score_explanation": "...",
+    "strengths": ["...", "..."],
+    "weaknesses": [
+      {{"issue": "...", "example": "...", "fix": "...", "rule": "..."}}
+    ],
+    "tips": ["...", "..."],
+    "metrics_summary": "..."
+  }},
+  "overall_strengths": ["...", "...", "..."],
+  "corrected_sample": "..."
+}}
+
+IMPORTANT:
+- Be SPECIFIC — cite actual words/phrases from the transcript, not generic feedback
+- Strengths must be REAL things the speaker did well, not invented
+- Tips must be actionable and concrete (e.g., "Replace 'good' with 'beneficial/advantageous'" not "use better words")
+- The corrected_sample must rewrite actual sentences from the transcript
+- If a criterion has no weaknesses, say so honestly
+- Keep weaknesses array empty [] if truly no issues found""",
+            model="gemini-pro",
+            temperature=0.4,
+            max_tokens=2000
+        ))
+
         # ---- Coaching prompts ----
         self._register_prompt(PromptConfig(
             key="coaching.free_coach",

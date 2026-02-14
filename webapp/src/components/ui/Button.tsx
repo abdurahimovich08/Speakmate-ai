@@ -1,4 +1,5 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { motion } from 'framer-motion'
 
 type Variant = 'primary' | 'ghost' | 'danger'
 type Size = 'md' | 'lg'
@@ -9,6 +10,7 @@ export function Button({
   leftIcon,
   className = '',
   children,
+  disabled,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant
@@ -24,16 +26,18 @@ export function Button({
         : 'bg-sm-card2 text-sm-text'
 
   const sizeClass = size === 'lg' ? 'px-5 py-3 text-sm' : 'px-4 py-2 text-sm'
-  const disabledClass = props.disabled ? 'opacity-60 active:scale-100' : ''
+  const disabledClass = disabled ? 'opacity-60' : ''
 
   return (
-    <button
-      {...props}
+    <motion.button
+      whileTap={disabled ? undefined : { scale: 0.96 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+      {...(props as Record<string, unknown>)}
+      disabled={disabled}
       className={`${base} ${sizeClass} ${variantClass} ${disabledClass} ${className}`}
     >
       {leftIcon}
       <span className="tracking-tight">{children}</span>
-    </button>
+    </motion.button>
   )
 }
-

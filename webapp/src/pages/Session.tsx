@@ -6,11 +6,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
 import { useSessionStore } from '../stores/sessionStore'
+import { useGamificationStore } from '../stores/gamificationStore'
 import { useAudio } from '../hooks/useAudio'
 import { telegramService } from '../services/telegram'
 import Timer from '../components/Timer'
 import { Button } from '../components/ui/Button'
+import SessionCelebration from '../components/gamification/SessionCelebration'
 
 function StatusPill({
   tone,
@@ -118,11 +121,23 @@ export default function Session() {
     return session?.mode === 'free_speaking' || session?.mode === 'ielts_test'
   }, [session?.mode])
 
+  const [showCelebration, setShowCelebration] = useState(false)
+  const streak = useGamificationStore((s) => s.streak)
+
   useEffect(() => {
     if (scores && session) {
+      // Show celebration screen first
+      setShowCelebration(true)
+      // Reload streak data for updated XP
+      useGamificationStore.getState().loadStreak()
+    }
+  }, [scores, session])
+
+  const handleCelebrationDone = useCallback(() => {
+    if (session) {
       navigate(`/results/${session.id}`, { replace: true })
     }
-  }, [scores, session, navigate])
+  }, [session, navigate])
 
   useEffect(() => {
     telegramService.webapp?.enableClosingConfirmation()
@@ -257,6 +272,20 @@ export default function Session() {
 
   return (
     <div className="flex flex-col h-screen font-ui bg-sm-bg text-sm-text">
+      {/* Celebration overlay */}
+      <AnimatePresence>
+        {showCelebration && scores && session && (
+          <SessionCelebration
+            band={scores.overall_band || 0}
+            xpEarned={50 + Math.round(((session as unknown as Record<string, unknown>).duration_seconds as number || 0) / 60 * 20)}
+            streak={streak?.current_streak || 0}
+            leveledUp={false}
+            levelName={streak?.level_name || 'First Words'}
+            onContinue={handleCelebrationDone}
+          />
+        )}
+      </AnimatePresence>
+
       <div className="px-4 pt-4 pb-3">
         <div className="sm-card p-4 overflow-hidden relative">
           <div className="absolute inset-0 opacity-25 bg-gradient-to-br from-sm-accent via-transparent to-sm-energy2" />

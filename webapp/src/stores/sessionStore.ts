@@ -13,6 +13,10 @@ import type {
   PronunciationReport,
   TrainingPlan,
   Recommendation,
+  FullCriterionFeedback,
+  FluencyMetrics,
+  LexicalMetrics,
+  GrammarMetrics,
   WSTranscription,
   WSAIMessage,
   WSSessionEnded,
@@ -38,6 +42,10 @@ interface SessionState {
   coachingTips: CoachingTip[]
   pronunciation: PronunciationReport | null
   trainingPlan: TrainingPlan | null
+  criterionFeedback: FullCriterionFeedback | null
+  fluencyMetrics: FluencyMetrics | null
+  lexicalMetrics: LexicalMetrics | null
+  grammarMetrics: GrammarMetrics | null
 
   // History
   sessions: Session[]
@@ -68,6 +76,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   coachingTips: [],
   pronunciation: null,
   trainingPlan: null,
+  criterionFeedback: null,
+  fluencyMetrics: null,
+  lexicalMetrics: null,
+  grammarMetrics: null,
   sessions: [],
   loadingSessions: false,
 
@@ -83,6 +95,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       coachingTips: [],
       pronunciation: null,
       trainingPlan: null,
+      criterionFeedback: null,
+      fluencyMetrics: null,
+      lexicalMetrics: null,
+      grammarMetrics: null,
       isEnding: false,
       isThinking: false,
     })
@@ -233,6 +249,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       coachingTips: [],
       pronunciation: null,
       trainingPlan: null,
+      criterionFeedback: null,
+      fluencyMetrics: null,
+      lexicalMetrics: null,
+      grammarMetrics: null,
     })
   },
 }))

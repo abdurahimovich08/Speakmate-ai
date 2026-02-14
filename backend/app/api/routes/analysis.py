@@ -1,4 +1,4 @@
-﻿"""
+"""
 SpeakMate AI - Analysis Routes
 
 Endpoints for session analysis and reports.
@@ -133,6 +133,12 @@ async def get_session_analysis(
     session_scores = _normalize_session_scores(session)
     scores = session_scores or (_run_scores(preferred) if preferred else {})
 
+    # Extract detailed data from deep analysis for easy frontend access
+    criterion_feedback = preferred_result.get("criterion_feedback", {})
+    fluency_metrics = preferred_result.get("fluency_metrics", {})
+    lexical_metrics = preferred_result.get("lexical_metrics", {})
+    grammar_metrics = preferred_result.get("grammar_metrics", {})
+
     return {
         "session_id": str(session_id),
         "session": {
@@ -143,9 +149,60 @@ async def get_session_analysis(
         "analysis": preferred_result,
         "scores": scores,
         "errors": errors,
+        "criterion_feedback": criterion_feedback,
+        "fluency_metrics": fluency_metrics,
+        "lexical_metrics": lexical_metrics,
+        "grammar_metrics": grammar_metrics,
         "fast_analysis": fast_run,
         "deep_analysis": deep_run,
         "has_pdf": bool(session.get("pdf_url") or session.get("pdf_report_url")),
+    }
+
+
+@router.get("/sessions/{session_id}/criterion-feedback")
+async def get_criterion_feedback(
+    session_id: UUID,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get detailed per-criterion feedback for a session."""
+    await _get_owned_session(session_id, current_user)
+
+    # Find the latest deep analysis run
+    try:
+        deep_result = (
+            db_service.client.table("analysis_runs")
+            .select("*")
+            .eq("session_id", str(session_id))
+            .order("created_at", desc=True)
+            .limit(5)
+            .execute()
+        )
+        runs = deep_result.data or []
+        deep_run = next(
+            (r for r in runs if _run_type(r) in ("deep",)),
+            None,
+        )
+    except Exception:
+        deep_run = None
+
+    if not deep_run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Deep analysis not yet available for this session",
+        )
+
+    result = _run_result(deep_run)
+    feedback = result.get("criterion_feedback", {})
+    metrics = {
+        "fluency_metrics": result.get("fluency_metrics", {}),
+        "lexical_metrics": result.get("lexical_metrics", {}),
+        "grammar_metrics": result.get("grammar_metrics", {}),
+    }
+
+    return {
+        "session_id": str(session_id),
+        "criterion_feedback": feedback,
+        "metrics": metrics,
     }
 
 
