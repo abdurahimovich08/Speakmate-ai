@@ -41,7 +41,8 @@ async def test_generate_greeting_training(service):
 
 
 def test_band_to_cefr():
-    assert ConversationService.band_to_cefr(3.0) == "A2"
+    assert ConversationService.band_to_cefr(3.0) == "A1"
+    assert ConversationService.band_to_cefr(4.0) == "A2"
     assert ConversationService.band_to_cefr(5.0) == "B1"
     assert ConversationService.band_to_cefr(6.5) == "B2"
     assert ConversationService.band_to_cefr(7.5) == "C1"

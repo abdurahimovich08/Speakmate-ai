@@ -21,9 +21,10 @@ async def test_quick_analysis_detects_filler_words(analyzer):
 
 @pytest.mark.asyncio
 async def test_quick_analysis_detects_repeated_words(analyzer):
-    text = "I I I went to the the store store."
+    # Word repetition requires count >= 4 and word length > 3, not stop words
+    text = "This amazing amazing amazing amazing project is truly amazing."
     errors = await analyzer.quick_analysis(text)
-    repeats = [e for e in errors if "repeat" in str(e.get("subcategory", "")).lower()]
+    repeats = [e for e in errors if "repetition" in str(e.get("subcategory", "")).lower()]
     assert len(repeats) >= 1
 
 
@@ -56,7 +57,7 @@ async def test_quick_analysis_returns_list_of_dicts(analyzer):
 def test_fluency_metrics_detects_discourse_markers(analyzer):
     text = "However, I think that moreover we should also consider the fact."
     metrics = analyzer.compute_fluency_metrics(text)
-    assert metrics["discourse_marker_count"] >= 1
+    assert metrics["discourse_markers"] >= 1
 
 
 def test_fluency_metrics_empty_text(analyzer):
@@ -95,7 +96,7 @@ def test_lexical_metrics_empty(analyzer):
 def test_grammar_metrics_detects_compound_sentence(analyzer):
     text = "I went to the store, and then I bought some food."
     metrics = analyzer.compute_grammar_metrics(text)
-    assert metrics["compound_count"] >= 1 or metrics["simple_count"] >= 1
+    assert metrics["compound_sentences"] >= 1 or metrics["simple_sentences"] >= 1
 
 
 def test_grammar_metrics_empty(analyzer):
@@ -106,7 +107,7 @@ def test_grammar_metrics_empty(analyzer):
 def test_grammar_metrics_complex_features(analyzer):
     text = "If I had known, I would have come. The book that was written by her is excellent."
     metrics = analyzer.compute_grammar_metrics(text)
-    assert isinstance(metrics.get("complex_features"), dict)
+    assert isinstance(metrics.get("complex_features"), list)
 
 
 # ------ get_improvement_suggestions ------

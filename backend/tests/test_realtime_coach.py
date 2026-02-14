@@ -5,8 +5,8 @@ from app.services.realtime_coach import RealtimeCoach
 
 def test_initial_state():
     coach = RealtimeCoach()
-    assert coach._turn_count == 0
-    assert coach._coached_errors == set()
+    assert coach.turn_count == 0
+    assert coach.coached_errors == []
 
 
 def test_no_tip_on_first_turn_without_errors():
