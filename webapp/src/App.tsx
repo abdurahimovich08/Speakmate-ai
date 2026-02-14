@@ -94,7 +94,10 @@ export default function App() {
     }
   }, [hydrated, token, login, initError])
 
-  if (!hydrated || loading) {
+  // Guard: don't render routes until we have a valid token.
+  // Without this, Home mounts and fires API calls before login() completes → 403.
+  const needsAuth = !token && !error && !initError
+  if (!hydrated || loading || needsAuth) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-sm-bg text-sm-text font-ui">
         <motion.div
