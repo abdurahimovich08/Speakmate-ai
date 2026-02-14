@@ -107,12 +107,50 @@ class TelegramService {
     return this.webapp?.platform || 'unknown'
   }
 
+  get viewportStableHeight(): number {
+    return this.webapp?.viewportStableHeight || window.innerHeight
+  }
+
   /** Call once on app boot */
   init() {
     if (!this.webapp) return
     this.webapp.ready()
     this.webapp.expand()
     this.webapp.enableClosingConfirmation()
+
+    // Apply theme colors
+    this._applyTheme()
+  }
+
+  /** Listen for theme changes (Telegram dark/light mode toggle) */
+  onThemeChange(callback: (scheme: 'light' | 'dark') => void): () => void {
+    if (!this.webapp) return () => {}
+    const handler = () => callback(this.webapp!.colorScheme)
+    // Telegram dispatches a custom event when theme changes
+    window.addEventListener('themeChanged', handler)
+    return () => window.removeEventListener('themeChanged', handler)
+  }
+
+  /** Share content using Telegram's native sharing */
+  share(text: string) {
+    if (this.webapp) {
+      // Use Telegram's built-in share via sendData or switching to inline
+      const url = `https://t.me/share/url?text=${encodeURIComponent(text)}`
+      window.open(url, '_blank')
+    }
+  }
+
+  private _applyTheme() {
+    if (!this.webapp) return
+    try {
+      const bg = this.webapp.themeParams?.bg_color
+      if (bg) {
+        this.webapp.setBackgroundColor(bg)
+        this.webapp.setHeaderColor(bg)
+      }
+    } catch {
+      // older clients may not support these
+    }
   }
 
   // ---- Main Button ----

@@ -83,19 +83,32 @@ async def get_user_stats(
     
     # Calculate average scores if available
     scores_list = [s.get("overall_scores") for s in sessions if s.get("overall_scores")]
-    avg_band = 0
+    bands = []
+    avg_band = 0.0
     if scores_list:
         bands = [s.get("overall_band", 0) for s in scores_list if s.get("overall_band")]
         avg_band = sum(bands) / len(bands) if bands else 0
     
     # Most common errors
     top_errors = error_profile[:5] if error_profile else []
+
+    # Calculate improvement trend: compare recent 10 sessions vs previous 10
+    improvement_trend = "stable"
+    if len(bands) >= 4:
+        mid = len(bands) // 2
+        recent_avg = sum(bands[:mid]) / mid
+        older_avg = sum(bands[mid:]) / (len(bands) - mid)
+        delta = recent_avg - older_avg
+        if delta > 0.3:
+            improvement_trend = "improving"
+        elif delta < -0.3:
+            improvement_trend = "declining"
     
     return {
         "total_sessions": total_sessions,
         "total_practice_minutes": total_minutes,
         "average_band": round(avg_band, 1),
-        "sessions_this_week": len([s for s in sessions[:7]]),  # Simplified
+        "sessions_this_week": len([s for s in sessions[:7]]),
         "top_error_categories": top_errors,
-        "improvement_trend": "improving"  # TODO: Calculate actual trend
+        "improvement_trend": improvement_trend,
     }

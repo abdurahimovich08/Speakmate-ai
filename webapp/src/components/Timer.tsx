@@ -7,9 +7,10 @@ import { useState, useEffect, useRef } from 'react'
 interface Props {
   running: boolean
   className?: string
+  'aria-label'?: string
 }
 
-export default function Timer({ running, className = '' }: Props) {
+export default function Timer({ running, className = '', 'aria-label': ariaLabel }: Props) {
   const [seconds, setSeconds] = useState(0)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -30,7 +31,7 @@ export default function Timer({ running, className = '' }: Props) {
   const ss = String(seconds % 60).padStart(2, '0')
 
   return (
-    <span className={`font-mono tabular-nums ${className}`}>
+    <span className={`font-mono tabular-nums ${className}`} aria-label={ariaLabel} role="timer">
       {mm}:{ss}
     </span>
   )

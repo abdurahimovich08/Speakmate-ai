@@ -80,6 +80,7 @@ export default function Session() {
     scores,
     endSession,
     isThinking,
+    coachingTips,
   } = useSessionStore()
 
   const {
@@ -271,7 +272,7 @@ export default function Session() {
               </div>
             </div>
             <div className="shrink-0 text-right">
-              <Timer running={isConnected} className="text-lg text-sm-muted tabular-nums" />
+              <Timer running={isConnected} className="text-lg text-sm-muted tabular-nums" aria-label="Session timer" />
               <div className="mt-2">
                 <Button variant="ghost" onClick={handleEnd} disabled={isEnding}>
                   End
@@ -282,7 +283,7 @@ export default function Session() {
         </div>
       </div>
 
-      <div ref={feedRef} className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
+      <div ref={feedRef} className="flex-1 overflow-y-auto px-4 pb-4 space-y-3" role="log" aria-label="Conversation" aria-live="polite">
         {visibleMessages.map((msg, i) => (
           <div
             key={i}
@@ -311,6 +312,31 @@ export default function Session() {
             <p className="text-[10px] mt-1 text-right text-sm-muted">Transcript</p>
           </div>
         )}
+
+        {/* Real-time coaching tip */}
+        {coachingTips.length > 0 && (() => {
+          const tip = coachingTips[coachingTips.length - 1]
+          return (
+            <div className="max-w-[92%] mr-auto animate-fade-in">
+              <div className="rounded-2xl px-4 py-3 text-xs border border-yellow-500/30 bg-yellow-500/5">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span>💡</span>
+                  <span className="font-medium uppercase tracking-wider text-[10px] text-yellow-400">
+                    Coaching tip
+                  </span>
+                </div>
+                {tip.original && (
+                  <p className="mb-1">
+                    <span className="line-through text-sm-muted">{tip.original}</span>
+                    <span className="mx-1.5 text-sm-muted">→</span>
+                    <span className="text-sm-energy font-medium">{tip.corrected}</span>
+                  </p>
+                )}
+                <p className="text-sm-muted leading-relaxed">{tip.tip}</p>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       <div className="px-4 pb-4">
@@ -326,6 +352,8 @@ export default function Session() {
             }}
             disabled={isEnding || !isSupported || !micArmed || (!isConnected && !recording)}
             onClick={handleToggleMic}
+            aria-label={micLabel}
+            aria-pressed={recording}
           >
             <div className="flex items-center justify-between gap-3">
               <div className="text-left">

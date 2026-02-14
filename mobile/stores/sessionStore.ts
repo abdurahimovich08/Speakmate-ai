@@ -13,6 +13,16 @@ import type {
   SessionFeedback,
 } from '@/types';
 
+/** Coaching tip from real-time analysis */
+interface CoachingTip {
+  category: string;
+  original: string;
+  corrected: string;
+  tip: string;
+  severity: string;
+  strategy: string;
+}
+
 interface SessionState {
   // Current session
   currentSession: Session | null;
@@ -31,6 +41,9 @@ interface SessionState {
   errors: DetectedError[];
   scores: IELTSScores | null;
   feedback: SessionFeedback | null;
+
+  // Coaching tips
+  coachingTips: CoachingTip[];
 
   // UI state
   isLoading: boolean;
@@ -62,6 +75,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   errors: [],
   scores: null,
   feedback: null,
+  coachingTips: [],
   isLoading: false,
   error: null,
   recentSessions: [],
@@ -79,6 +93,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         messages: [],
         errors: [],
         scores: null,
+        coachingTips: [],
       });
 
       // Connect WebSocket
@@ -130,10 +145,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
             }
             break;
 
+          case 'coaching_tip':
+            set((state) => ({
+              coachingTips: [...state.coachingTips, data as unknown as CoachingTip],
+            }));
+            break;
+
           case 'session_ended':
             set({
               errors: data.errors || [],
               scores: data.scores || null,
+              coachingTips: data.coaching_tips || get().coachingTips,
               isSessionActive: false,
             });
             break;

@@ -34,12 +34,20 @@ export interface Session {
   ended_at?: string
 }
 
+export interface IELTSCriterionDetail {
+  band: number
+  evidence?: string[]
+  descriptor?: string
+  error_count?: number
+}
+
 export interface IELTSScores {
-  fluency_coherence: number
-  lexical_resource: number
-  grammatical_range: number
-  pronunciation: number
+  fluency_coherence: number | IELTSCriterionDetail
+  lexical_resource: number | IELTSCriterionDetail
+  grammatical_range: number | IELTSCriterionDetail
+  pronunciation: number | IELTSCriterionDetail
   overall_band: number
+  summary?: string
   word_count?: number
   total_errors?: number
 }
@@ -83,14 +91,82 @@ export interface WSAIMessage {
   turn_number?: number
 }
 
+export interface CoachingTip {
+  category: ErrorCategory
+  subcategory?: string
+  error_code?: string
+  original: string
+  corrected: string
+  explanation: string
+  tip: string
+  severity: string
+  strategy?: string
+}
+
+export interface PronunciationReport {
+  overall_score?: number
+  band_estimate?: number
+  intelligibility?: {
+    score: number
+    avg_confidence: number
+    low_confidence_words: number
+    likely_issues: Array<{
+      word: string
+      confidence: number
+      issue_type: string
+      suggestion: string
+    }>
+  }
+  prosody?: {
+    score: number
+    speaking_rate_wpm: number
+    pause_count: number
+    avg_pause_ms: number
+    filler_rate: number
+  }
+  feedback?: string[]
+  problem_areas?: Array<{
+    area: string
+    severity: string
+    description: string
+    drill_type: string
+  }>
+}
+
+export interface TrainingPlan {
+  duration_days?: number
+  focus_areas?: string[]
+  daily_tasks?: Array<{
+    day: number
+    focus: string
+    tasks: string[]
+    estimated_minutes: number
+  }>
+}
+
+export interface Recommendation {
+  priority?: string
+  area?: string
+  recommendation: string
+  resources?: string[]
+}
+
 export interface WSSessionEnded {
   duration_seconds: number
   turn_count: number
   total_errors: number
   scores: IELTSScores
   errors: DetectedError[]
-  recommendations?: string[]
-  analysis?: Record<string, unknown>
+  pronunciation?: PronunciationReport
+  recommendations?: Recommendation[]
+  coaching_tips?: CoachingTip[]
+  coaching_summary?: {
+    total_turns: number
+    total_errors_detected: number
+    coaching_tips_given: number
+    errors_by_category: Record<string, number>
+  }
+  training_plan?: TrainingPlan
   message: string
 }
 

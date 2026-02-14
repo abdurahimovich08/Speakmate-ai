@@ -2,7 +2,7 @@
    Super Coach - Premium daily coach dashboard
    =========================== */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTelegramBackButton } from '../hooks/useTelegram'
 import { telegramService } from '../services/telegram'
@@ -23,9 +23,16 @@ import {
 } from '../services/api'
 import { Button } from '../components/ui/Button'
 import { Card, SoftCard } from '../components/ui/Card'
+import { CoachSkeleton } from '../components/ui/Skeleton'
+import CoachMission from '../components/coach/CoachMission'
+import CoachDrills from '../components/coach/CoachDrills'
+import CoachSkillGraph from '../components/coach/CoachSkillGraph'
+import CoachProgress from '../components/coach/CoachProgress'
+import CoachMemory from '../components/coach/CoachMemory'
+import CoachInsights from '../components/coach/CoachInsights'
 import type {
   BehaviorInsight,
-  CoachMemory,
+  CoachMemory as CoachMemoryType,
   DailyMission,
   MnemonicDrill,
   ProgressProof,
@@ -51,18 +58,9 @@ function asProgressProof(payload: Record<string, unknown>): ProgressProof | null
   return payload as unknown as ProgressProof
 }
 
-function asCoachMemory(payload: Record<string, unknown>): CoachMemory | null {
+function asCoachMemory(payload: Record<string, unknown>): CoachMemoryType | null {
   if (!payload || !Array.isArray(payload.goals)) return null
-  return payload as unknown as CoachMemory
-}
-
-function clamp01(v: number) {
-  if (!Number.isFinite(v)) return 0
-  return Math.max(0, Math.min(1, v))
-}
-
-function pct(n: number) {
-  return `${Math.round(clamp01(n) * 100)}%`
+  return payload as unknown as CoachMemoryType
 }
 
 export default function Coach() {
@@ -76,21 +74,14 @@ export default function Coach() {
   const [drills, setDrills] = useState<MnemonicDrill[]>([])
   const [skillGraph, setSkillGraph] = useState<SkillGraph | null>(null)
   const [proof, setProof] = useState<ProgressProof | null>(null)
-  const [memory, setMemory] = useState<CoachMemory | null>(null)
+  const [memory, setMemory] = useState<CoachMemoryType | null>(null)
   const [insights, setInsights] = useState<BehaviorInsight[]>([])
   const [speakFirst, setSpeakFirst] = useState<SpeakFirstPlan | null>(null)
   const [comfortMode, setComfortMode] = useState(false)
   const [diagnosisInput, setDiagnosisInput] = useState('')
   const [diagnosisResult, setDiagnosisResult] = useState<Record<string, unknown> | null>(null)
   const [shareCard, setShareCard] = useState<Record<string, unknown> | null>(null)
-  const [goalsInput, setGoalsInput] = useState('')
-  const [notesInput, setNotesInput] = useState('')
   const [error, setError] = useState<string | null>(null)
-
-  const missionCompletion = useMemo(() => {
-    if (!mission) return 0
-    return clamp01(completed.length / Math.max(1, mission.tasks.length))
-  }, [completed, mission])
 
   const loadDashboard = async () => {
     setLoading(true)
@@ -136,10 +127,7 @@ export default function Coach() {
 
     const [memoryRes, insightsRes, speakRes, shareRes] = secondary
     if (memoryRes.status === 'fulfilled') {
-      const memoryPayload = asCoachMemory(memoryRes.value)
-      setMemory(memoryPayload)
-      setGoalsInput(((memoryRes.value.goals as string[] | undefined) || []).join('; '))
-      setNotesInput((memoryRes.value.notes as string | undefined) || '')
+      setMemory(asCoachMemory(memoryRes.value))
     }
     if (insightsRes.status === 'fulfilled') {
       setInsights(((((insightsRes.value as Record<string, unknown>).insights as unknown[]) || []) as BehaviorInsight[]))
@@ -188,14 +176,10 @@ export default function Coach() {
     }
   }
 
-  const handleSaveMemory = async () => {
+  const handleSaveMemory = async (goals: string[], notes: string) => {
     setSaving(true)
     try {
-      const goals = goalsInput
-        .split(';')
-        .map((g) => g.trim())
-        .filter(Boolean)
-      const updated = await updateCoachMemory({ goals, notes: notesInput })
+      const updated = await updateCoachMemory({ goals, notes })
       setMemory(asCoachMemory(updated))
       telegramService.hapticNotification('success')
     } catch (e) {
@@ -236,17 +220,12 @@ export default function Coach() {
   }
 
   if (loading) {
-    return (
-      <div className="p-4 font-ui">
-        <Card className="p-4">
-          <p className="text-sm text-sm-muted">Loading your coach...</p>
-        </Card>
-      </div>
-    )
+    return <CoachSkeleton />
   }
 
   return (
     <div className="p-4 space-y-4 animate-fade-in font-ui">
+      {/* Header */}
       <Card className="p-4 overflow-hidden relative">
         <div className="absolute inset-0 opacity-25 bg-gradient-to-r from-sm-energy via-transparent to-sm-accent" />
         <div className="relative flex items-start justify-between gap-4">
@@ -256,7 +235,7 @@ export default function Coach() {
             <p className="text-xs text-sm-muted mt-2 leading-relaxed">
               10-15 minut: Recall → Fix → Speak. Energiya bilan, lekin aniq.
             </p>
-            {error && <p className="text-xs text-sm-danger mt-3">{error}</p>}
+            {error && <p className="text-xs text-sm-danger mt-3" role="alert">{error}</p>}
           </div>
           <div className="shrink-0 flex flex-col gap-2">
             <Button variant="ghost" onClick={() => loadDashboard()} disabled={saving}>
@@ -269,271 +248,41 @@ export default function Coach() {
         </div>
       </Card>
 
+      {/* Daily Mission */}
       {mission && (
-        <Card className="p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Today</p>
-              <h2 className="text-lg font-semibold tracking-tight mt-1">
-                Daily Mission ({mission.total_minutes} min)
-              </h2>
-              <p className="text-xs text-sm-muted mt-2">
-                Best window: {mission.best_time_to_practice.window} · Difficulty: {mission.difficulty}
-              </p>
-            </div>
-
-            <div className="shrink-0 text-right">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Completion</p>
-              <p className="text-2xl font-semibold font-display tabular-nums mt-1">
-                {pct(missionCompletion)}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            {mission.tasks.map((task) => {
-              const done = completed.includes(task.id)
-              return (
-                <button
-                  key={task.id}
-                  onClick={() => toggleTask(task.id)}
-                  className="w-full text-left sm-card-soft rounded-2xl p-4 transition-transform active:scale-[0.985]"
-                >
-                  <div className="flex items-start gap-3">
-                    <span
-                      className={`mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-xl border border-sm-border ${
-                        done ? 'bg-tg-button text-tg-button-text' : 'bg-sm-card2 text-sm-muted'
-                      }`}
-                    >
-                      {done ? '✓' : ''}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold tracking-tight">
-                        {task.title} <span className="text-xs text-sm-muted">({task.duration_min}m)</span>
-                      </p>
-                      <p className="text-xs text-sm-muted mt-1 leading-relaxed">{task.instruction}</p>
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setCompleted(mission.tasks.map((t) => t.id))
-                telegramService.hapticSelection()
-              }}
-            >
-              Mark all
-            </Button>
-            <Button
-              variant="primary"
-              disabled={saving || completed.length === 0}
-              onClick={handleCompleteMission}
-            >
-              {saving ? 'Saving...' : 'Complete'}
-            </Button>
-          </div>
-        </Card>
+        <CoachMission
+          mission={mission}
+          completed={completed}
+          saving={saving}
+          onToggleTask={toggleTask}
+          onMarkAll={() => {
+            setCompleted(mission.tasks.map((t) => t.id))
+            telegramService.hapticSelection()
+          }}
+          onComplete={handleCompleteMission}
+        />
       )}
 
-      <Card className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Fix fast</p>
-            <h2 className="text-lg font-semibold tracking-tight mt-1">Mnemonic drills</h2>
-            <p className="text-xs text-sm-muted mt-2 leading-relaxed">
-              Agar xato 3 marta takrorlansa, biz uni "memory hook" bilan mixlab, qayta-qayta eslatamiz.
-            </p>
-          </div>
-        </div>
+      {/* Mnemonic Drills */}
+      <CoachDrills drills={drills} onFeedback={handleMnemonicFeedback} />
 
-        <div className="mt-4 space-y-3">
-          {drills.length === 0 && (
-            <SoftCard className="p-4">
-              <p className="text-sm text-sm-muted">Hali recurring error yo'q. Gapiring, biz topamiz.</p>
-            </SoftCard>
-          )}
-
-          {drills.map((drill) => (
-            <SoftCard key={`${drill.error_code}-${drill.style}`} className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold tracking-tight truncate">
-                    {drill.error_code}
-                    <span className="text-xs text-sm-muted"> · {drill.style}</span>
-                  </p>
-                  <p className="text-xs text-sm-muted mt-2 leading-relaxed">{drill.mnemonic}</p>
-                </div>
-                <div className="shrink-0 text-[11px] text-sm-muted">
-                  {drill.category}
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-5 gap-2">
-                {[1, 2, 3, 4, 5].map((score) => (
-                  <button
-                    key={score}
-                    onClick={() => handleMnemonicFeedback(drill, score)}
-                    className="py-2 rounded-xl text-xs font-semibold bg-sm-card2 border border-sm-border text-sm-text active:scale-[0.98] transition-transform"
-                  >
-                    {score}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-sm-muted mt-2">
-                Rate: 1 = useless, 5 = sticks in your head.
-              </p>
-            </SoftCard>
-          ))}
-        </div>
-      </Card>
-
+      {/* Skill Graph + Progress Proof */}
       <div className="grid grid-cols-1 gap-4">
-        {skillGraph && (
-          <Card className="p-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Map</p>
-            <h2 className="text-lg font-semibold tracking-tight mt-1">Skill graph</h2>
-            <p className="text-xs text-sm-muted mt-2 leading-relaxed">
-              Level emas, micro-skill. Eng kuchli 2 va eng zaif 3 fokus.
-            </p>
-
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <SoftCard className="p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Top weak</p>
-                <div className="mt-3 space-y-2">
-                  {skillGraph.top_weak.slice(0, 3).map((s) => (
-                    <div key={s.skill_id}>
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium tracking-tight">{s.label}</p>
-                        <p className="text-sm font-semibold tabular-nums">{s.score.toFixed(1)}</p>
-                      </div>
-                      <div className="mt-2 h-2 rounded-full bg-sm-card2 overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.round((Math.max(0, Math.min(9, s.score)) / 9) * 100)}%`,
-                            background: 'linear-gradient(90deg, var(--sm-energy-2), var(--sm-accent))',
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                  {skillGraph.top_weak.length === 0 && (
-                    <p className="text-sm text-sm-muted">More data needed.</p>
-                  )}
-                </div>
-              </SoftCard>
-
-              <SoftCard className="p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Top improving</p>
-                <div className="mt-3 space-y-2">
-                  {skillGraph.top_improving.slice(0, 3).map((s) => (
-                    <div key={s.skill_id} className="flex items-center justify-between">
-                      <p className="text-sm font-medium tracking-tight">{s.label}</p>
-                      <p className="text-sm font-semibold tabular-nums text-sm-success">
-                        +{s.trend_delta.toFixed(1)}
-                      </p>
-                    </div>
-                  ))}
-                  {skillGraph.top_improving.length === 0 && (
-                    <p className="text-sm text-sm-muted">More sessions → more signal.</p>
-                  )}
-                </div>
-              </SoftCard>
-            </div>
-
-            {skillGraph.focus_recommendation?.length ? (
-              <div className="mt-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Focus</p>
-                <ul className="mt-2 space-y-2 text-sm">
-                  {skillGraph.focus_recommendation.slice(0, 3).map((t, i) => (
-                    <li key={i} className="flex gap-2">
-                      <span className="mt-2 h-1.5 w-1.5 rounded-full bg-sm-energy" />
-                      <span className="leading-relaxed">{t}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </Card>
-        )}
-
-        {proof && (
-          <Card className="p-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Proof</p>
-            <h2 className="text-lg font-semibold tracking-tight mt-1">Progress dashboard</h2>
-            <p className="text-xs text-sm-muted mt-2 leading-relaxed">
-              Eng katta retention savol: "Men o'tgan haftadan yaxshimanmi?" Bu yerda javob bor.
-            </p>
-
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <SoftCard className="p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Status</p>
-                <p className="text-lg font-semibold mt-2 tracking-tight">{proof.status}</p>
-                <p className="text-xs text-sm-muted mt-1">Confidence: {pct(proof.confidence || 0)}</p>
-              </SoftCard>
-
-              <SoftCard className="p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Weekly vibe</p>
-                <p className="text-sm mt-2 leading-relaxed">
-                  {proof.status === 'needs_more_data'
-                    ? "Ko'proq session kerak. 3-5 ta practice qiling, keyin trend aniq bo'ladi."
-                    : 'Trend bor. Endi eng zaif 1 skillni 7 kun bosib ketamiz.'}
-                </p>
-              </SoftCard>
-            </div>
-
-            {proof.deltas && (
-              <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                <SoftCard className="p-3">
-                  Band Δ: <b>{proof.deltas.band_delta}</b>
-                </SoftCard>
-                <SoftCard className="p-3">
-                  Filler Δ: <b>{proof.deltas.filler_rate_delta}%</b>
-                </SoftCard>
-                <SoftCard className="p-3">
-                  WPM Δ: <b>{proof.deltas.wpm_delta}</b>
-                </SoftCard>
-                <SoftCard className="p-3">
-                  Grammar Δ: <b>{proof.deltas.grammar_accuracy_delta}</b>
-                </SoftCard>
-              </div>
-            )}
-
-            {proof.highlights?.length ? (
-              <div className="mt-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Highlights</p>
-                <ul className="mt-2 space-y-2 text-sm">
-                  {proof.highlights.slice(0, 3).map((h) => (
-                    <li key={h} className="flex gap-2">
-                      <span className="mt-2 h-1.5 w-1.5 rounded-full bg-sm-accent" />
-                      <span className="leading-relaxed">{h}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </Card>
-        )}
+        {skillGraph && <CoachSkillGraph skillGraph={skillGraph} />}
+        {proof && <CoachProgress proof={proof} />}
       </div>
 
+      {/* Speak-First Drills */}
       <Card className="p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Speak-first</p>
             <h2 className="text-lg font-semibold tracking-tight mt-1">Active drills</h2>
           </div>
-          <Button
-            variant="ghost"
-            onClick={() => setComfortMode((v) => !v)}
-          >
+          <Button variant="ghost" onClick={() => setComfortMode((v) => !v)}>
             {comfortMode ? 'Comfort ON' : 'Comfort OFF'}
           </Button>
         </div>
-
         <div className="mt-4 space-y-2">
           {speakFirst?.drills?.map((d) => (
             <SoftCard key={d.id} className="p-4">
@@ -549,36 +298,28 @@ export default function Coach() {
         </div>
       </Card>
 
+      {/* Quick Diagnosis */}
       <Card className="p-4">
         <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Acquisition</p>
         <h2 className="text-lg font-semibold tracking-tight mt-1">2-minute diagnosis</h2>
         <p className="text-xs text-sm-muted mt-2 leading-relaxed">
           Qisqa transcript tashlang. Coach sizga band + top 3 action beradi.
         </p>
-
         <textarea
           value={diagnosisInput}
           onChange={(e) => setDiagnosisInput(e.target.value)}
           placeholder="Paste short speaking transcript..."
           className="mt-3 w-full rounded-2xl bg-sm-card2 border border-sm-border px-4 py-3 text-sm min-h-[110px] outline-none"
+          aria-label="Speaking transcript for diagnosis"
         />
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <Button
-            variant="ghost"
-            onClick={() => setDiagnosisInput('')}
-            disabled={saving || diagnosisInput.trim().length === 0}
-          >
+          <Button variant="ghost" onClick={() => setDiagnosisInput('')} disabled={saving || !diagnosisInput.trim()}>
             Clear
           </Button>
-          <Button
-            variant="primary"
-            disabled={saving || diagnosisInput.trim().length < 20}
-            onClick={handleDiagnosis}
-          >
+          <Button variant="primary" disabled={saving || diagnosisInput.trim().length < 20} onClick={handleDiagnosis}>
             {saving ? 'Running...' : 'Run diagnosis'}
           </Button>
         </div>
-
         {diagnosisResult && (
           <SoftCard className="p-4 mt-4">
             <p className="text-sm">
@@ -594,80 +335,18 @@ export default function Coach() {
         )}
       </Card>
 
+      {/* Coach Memory */}
       {memory && (
-        <Card className="p-4">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Personalization</p>
-          <h2 className="text-lg font-semibold tracking-tight mt-1">Coach memory</h2>
-          <p className="text-xs text-sm-muted mt-2 leading-relaxed">{memory.panel_hint}</p>
-
-          <label className="block text-xs mt-4 text-sm-muted">Goals (separate with ;)</label>
-          <input
-            value={goalsInput}
-            onChange={(e) => setGoalsInput(e.target.value)}
-            className="mt-2 w-full rounded-2xl bg-sm-card2 border border-sm-border px-4 py-3 text-sm outline-none"
-          />
-
-          <label className="block text-xs mt-4 text-sm-muted">Notes</label>
-          <textarea
-            value={notesInput}
-            onChange={(e) => setNotesInput(e.target.value)}
-            className="mt-2 w-full rounded-2xl bg-sm-card2 border border-sm-border px-4 py-3 text-sm min-h-[90px] outline-none"
-          />
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <Button variant="ghost" onClick={handleClearMemory} disabled={saving}>
-              Clear
-            </Button>
-            <Button variant="primary" onClick={handleSaveMemory} disabled={saving}>
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
-        </Card>
+        <CoachMemory
+          memory={memory}
+          saving={saving}
+          onSave={handleSaveMemory}
+          onClear={handleClearMemory}
+        />
       )}
 
-      <Card className="p-4">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Product thinking</p>
-        <h2 className="text-lg font-semibold tracking-tight mt-1">What are we not seeing?</h2>
-        <p className="text-xs text-sm-muted mt-2 leading-relaxed">
-          Foydalanuvchi qachon chiqib ketadi? Qaysi friction drop beradi? Insightlar shu yerda.
-        </p>
-
-        <div className="mt-4 space-y-2">
-          {insights.length === 0 && (
-            <SoftCard className="p-4">
-              <p className="text-sm text-sm-muted">No insights yet.</p>
-            </SoftCard>
-          )}
-          {insights.map((insight, idx) => (
-            <SoftCard key={`${insight.risk}-${idx}`} className="p-4">
-              <p className="text-sm font-semibold tracking-tight">{insight.what_am_i_not_seeing}</p>
-              <p className="text-xs text-sm-muted mt-2">Action: {insight.action}</p>
-            </SoftCard>
-          ))}
-        </div>
-      </Card>
-
-      {shareCard && (
-        <Card className="p-4">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted">Growth</p>
-          <h2 className="text-lg font-semibold tracking-tight mt-1">Share card (preview)</h2>
-          <p className="text-xs text-sm-muted mt-2 leading-relaxed">
-            Screenshot qilib ulashing. Har share card ichida bitta real tip bo'lsin.
-          </p>
-
-          <SoftCard className="p-4 mt-4">
-            <p className="text-sm font-semibold tracking-tight">{String(shareCard.title || 'Progress')}</p>
-            <p className="text-sm mt-2 leading-relaxed">{String(shareCard.win_text || '')}</p>
-            <p className="text-xs text-sm-muted mt-2 leading-relaxed">{String(shareCard.personal_tip || '')}</p>
-          </SoftCard>
-
-          <div className="mt-3">
-            <Button variant="ghost" className="w-full" onClick={() => navigate('/practice')}>
-              Prove it again
-            </Button>
-          </div>
-        </Card>
-      )}
+      {/* Insights + Share Card */}
+      <CoachInsights insights={insights} shareCard={shareCard} />
     </div>
   )
 }

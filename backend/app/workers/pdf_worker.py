@@ -74,19 +74,62 @@ async def _generate_report(session_id: str, user_id: str) -> Dict[str, Any]:
         turns=turns
     )
     
-    # TODO: Upload to Supabase Storage and get signed URL
-    # For now, return local path
-    
+    # Upload to Supabase Storage
+    report_url = await _upload_to_storage(pdf_path, session_id)
+
+    # Update session record with report URL
+    if report_url:
+        try:
+            db_service.client.table("sessions").update(
+                {"pdf_report_url": report_url}
+            ).eq("id", session_id).execute()
+        except Exception as e:
+            logger.warning(f"Failed to save report URL to session: {e}")
+
+    # Clean up local file
+    try:
+        os.remove(pdf_path)
+    except OSError:
+        pass
+
     processing_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
     
-    logger.info(f"PDF report generated in {processing_time}ms: {pdf_path}")
+    logger.info(f"PDF report generated in {processing_time}ms for session {session_id}")
     
     return {
         "session_id": session_id,
-        "pdf_path": pdf_path,
+        "pdf_url": report_url,
         "processing_time_ms": processing_time,
         "generated_at": datetime.utcnow().isoformat()
     }
+
+
+async def _upload_to_storage(pdf_path: str, session_id: str) -> str | None:
+    """Upload PDF to Supabase Storage and return a signed URL."""
+    try:
+        storage_path = f"reports/report_{session_id}.pdf"
+        bucket_name = settings.STORAGE_BUCKET or "speakmate-assets"
+
+        with open(pdf_path, "rb") as f:
+            file_bytes = f.read()
+
+        # Upload to Supabase Storage bucket
+        db_service.client.storage.from_(bucket_name).upload(
+            path=storage_path,
+            file=file_bytes,
+            file_options={"content-type": "application/pdf", "upsert": "true"},
+        )
+
+        # Get a signed URL valid for 7 days
+        signed = db_service.client.storage.from_(bucket_name).create_signed_url(
+            path=storage_path,
+            expires_in=7 * 24 * 3600,
+        )
+        url = signed.get("signedURL") if isinstance(signed, dict) else getattr(signed, "signed_url", None)
+        return url or None
+    except Exception as e:
+        logger.error(f"Failed to upload PDF to storage: {e}")
+        return None
 
 
 class ProfessionalReportGenerator:

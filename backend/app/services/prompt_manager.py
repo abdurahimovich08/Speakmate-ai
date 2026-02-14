@@ -251,6 +251,38 @@ Keep tone supportive and motivating. Don't be generic.""",
             temperature=0.7,
             max_tokens=150
         ))
+        
+        # ---- Coaching prompts ----
+        self._register_prompt(PromptConfig(
+            key="coaching.free_coach",
+            version="v1",
+            template=self._load_file(prompts_dir, "coaching/free_coach_v1.txt") or "",
+            system_instructions=("You are an expert IELTS speaking coach. "
+                                 "Correct gently using recasts. Stay conversational."),
+            model="gemini-pro",
+            temperature=0.8,
+            max_tokens=250
+        ))
+        
+        self._register_prompt(PromptConfig(
+            key="coaching.ielts_examiner",
+            version="v2",
+            template=self._load_file(prompts_dir, "coaching/ielts_examiner_v2.txt") or "",
+            system_instructions="You are a professional IELTS examiner. Be neutral and formal.",
+            model="gemini-pro",
+            temperature=0.5,
+            max_tokens=150
+        ))
+        
+        self._register_prompt(PromptConfig(
+            key="coaching.training_drill",
+            version="v1",
+            template=self._load_file(prompts_dir, "coaching/training_drill_v1.txt") or "",
+            system_instructions="You are a focused English training coach. Be patient and clear.",
+            model="gemini-pro",
+            temperature=0.6,
+            max_tokens=300
+        ))
     
     def _load_file(self, base_dir: str, filename: str) -> Optional[str]:
         """Load prompt from file if exists."""

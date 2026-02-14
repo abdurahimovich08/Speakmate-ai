@@ -9,6 +9,10 @@ import type {
   ConversationTurn,
   DetectedError,
   IELTSScores,
+  CoachingTip,
+  PronunciationReport,
+  TrainingPlan,
+  Recommendation,
   WSTranscription,
   WSAIMessage,
   WSSessionEnded,
@@ -30,7 +34,10 @@ interface SessionState {
   // Results
   scores: IELTSScores | null
   errors: DetectedError[]
-  recommendations: string[]
+  recommendations: Recommendation[]
+  coachingTips: CoachingTip[]
+  pronunciation: PronunciationReport | null
+  trainingPlan: TrainingPlan | null
 
   // History
   sessions: Session[]
@@ -58,6 +65,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   scores: null,
   errors: [],
   recommendations: [],
+  coachingTips: [],
+  pronunciation: null,
+  trainingPlan: null,
   sessions: [],
   loadingSessions: false,
 
@@ -70,6 +80,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       scores: null,
       errors: [],
       recommendations: [],
+      coachingTips: [],
+      pronunciation: null,
+      trainingPlan: null,
       isEnding: false,
       isThinking: false,
     })
@@ -107,12 +120,38 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       set({ isThinking: false })
     })
 
+    socket.on('ai_audio', (msg) => {
+      try {
+        const audio = (msg.data as { audio: string; format: string }).audio
+        if (audio) {
+          const binary = atob(audio)
+          const bytes = new Uint8Array(binary.length)
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+          const blob = new Blob([bytes], { type: 'audio/mp3' })
+          const url = URL.createObjectURL(blob)
+          const el = new Audio(url)
+          el.play().catch(() => {})
+          el.onended = () => URL.revokeObjectURL(url)
+        }
+      } catch {
+        // TTS playback is optional — don't break anything
+      }
+    })
+
+    socket.on('coaching_tip', (msg) => {
+      const tip = msg.data as unknown as CoachingTip
+      set((s) => ({ coachingTips: [...s.coachingTips, tip] }))
+    })
+
     socket.on('session_ended', (msg) => {
       const data = msg.data as unknown as WSSessionEnded
       set({
         scores: data.scores,
         errors: data.errors,
         recommendations: data.recommendations || [],
+        coachingTips: data.coaching_tips || get().coachingTips,
+        pronunciation: data.pronunciation || null,
+        trainingPlan: data.training_plan || null,
         isConnected: false,
         isEnding: false,
         isThinking: false,
@@ -191,6 +230,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       scores: null,
       errors: [],
       recommendations: [],
+      coachingTips: [],
+      pronunciation: null,
+      trainingPlan: null,
     })
   },
 }))

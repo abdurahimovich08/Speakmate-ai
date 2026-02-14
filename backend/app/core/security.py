@@ -67,10 +67,16 @@ def verify_supabase_token_string(token: str) -> dict:
                 algorithms=["HS256"],
                 audience="authenticated"
             )
-        else:
-            # Development fallback only.
-            logger.warning("JWT verification disabled - set SUPABASE_JWT_SECRET for production")
+        elif settings.ENVIRONMENT == "development":
+            # Development fallback only — NEVER in production.
+            logger.warning("JWT verification disabled — set SUPABASE_JWT_SECRET for production")
             payload = decode_jwt_unverified(token)
+        else:
+            # Production: refuse to proceed without a JWT secret.
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Server misconfiguration: SUPABASE_JWT_SECRET is required"
+            )
 
         user_id = payload.get("sub")
         if not user_id:

@@ -57,7 +57,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'speakmate-auth',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         token: state.token,
         user: state.user,

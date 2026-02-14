@@ -182,6 +182,11 @@ class AnalysisCoordinator:
                     native_language=native_language
                 )
             
+            # Compute detailed IELTS criterion metrics
+            fluency_metrics = self.error_analyzer.compute_fluency_metrics(transcription)
+            lexical_metrics = self.error_analyzer.compute_lexical_metrics(transcription)
+            grammar_metrics = self.error_analyzer.compute_grammar_metrics(transcription)
+
             # Full IELTS scoring
             scores = await ielts_scorer.score_with_evidence(
                 transcription=transcription,
@@ -210,6 +215,9 @@ class AnalysisCoordinator:
                 "error_count": len(errors),
                 "scores": scores,
                 "pronunciation": pronunciation_result,
+                "fluency_metrics": fluency_metrics,
+                "lexical_metrics": lexical_metrics,
+                "grammar_metrics": grammar_metrics,
                 "recommendations": recommendations,
                 "training_plan": training_plan
             }

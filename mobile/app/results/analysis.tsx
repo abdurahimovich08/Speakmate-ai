@@ -26,82 +26,33 @@ const { width } = Dimensions.get('window');
 // Tab types
 type TabType = 'grammar' | 'fluency' | 'vocabulary' | 'pronunciation';
 
-// Mock data - fallback agar backend dan kelmasa
-const mockAnalysis: AnalysisData = {
-  sessionId: 'mock-session',
+// Empty default — no mock data in production
+const emptyAnalysis: AnalysisData = {
+  sessionId: '',
   createdAt: new Date(),
-  sessionDuration: 180,
-  overallBand: 7.5,
-  grammar: {
-    score: 9.0,
-    errors: [
-      {
-        id: '1',
-        type: 'DETERMINER',
-        original: "I don't have any idea about this. Do you have a?",
-        corrected: "I don't have any idea about this. Do you have one?",
-        explanation: "Determiner error, such as incorrect use of 'a', 'an', or 'the'.",
-      },
-      {
-        id: '2',
-        type: 'VERB FORM',
-        original: "I'm a web developer and right now I am practicing to build my own app.",
-        corrected: "I'm a web developer, and right now I am practicing building my own app.",
-        explanation: "Verb form error, such as using the wrong verb form (e.g., gerund instead of infinitive).",
-      },
-    ],
-    fillerWords: 0,
-  },
+  sessionDuration: 0,
+  overallBand: 0,
+  grammar: { score: 0, errors: [], fillerWords: 0 },
   fluency: {
-    score: 4.5,
-    wordsPerMinute: 106,
-    syllablesPerMinute: 124,
+    score: 0,
+    wordsPerMinute: 0,
+    syllablesPerMinute: 0,
     awkwardPauses: 0,
-    improvedSpeech: "No, that's not correct. I don't think so.",
+    improvedSpeech: '',
     speakingRate: 'slow' as const,
   },
   vocabulary: {
-    score: 7.5,
-    wordLevels: { A1: 12.1, A2: 30.3, B1: 48.5, B2: 6.1, C1: 1.5, C2: 1.5 },
-    uniqueWords: 45,
-    totalWords: 120,
-    suggestions: [
-      {
-        id: '1',
-        word: 'Insight',
-        type: 'noun',
-        definition: 'A sight or view of the interior of anything; a deep inspection or view; introspection.',
-        original: "I don't have any idea about this.",
-        corrected: "I don't have any insight about this.",
-      },
-      {
-        id: '2',
-        word: 'Experimenting',
-        type: 'verb',
-        definition: 'To conduct an experiment.',
-        original: "I am practicing to build my own app.",
-        corrected: "I am experimenting to build my own app.",
-      },
-      {
-        id: '3',
-        word: 'Simply',
-        type: 'adverb',
-        definition: 'In a simple way or state; without addition; alone.',
-        original: "I can say it's just",
-        corrected: "I can say it's simply.",
-      },
-    ],
+    score: 0,
+    wordLevels: { A1: 0, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 },
+    uniqueWords: 0,
+    totalWords: 0,
+    suggestions: [],
   },
   pronunciation: {
-    score: 8.0,
-    wordsToImprove: [
-      { word: 'Practicing', ipa: 'pɹæktɪsɪŋ', accuracy: 36 },
-      { word: 'Build', ipa: 'bɪld', accuracy: 72 },
-      { word: 'This', ipa: 'ðɪs', accuracy: 45 },
-      { word: 'Mood', ipa: 'muːd', accuracy: 68 },
-    ],
-    overallClarity: 75,
-    intonation: 68,
+    score: 0,
+    wordsToImprove: [],
+    overallClarity: 0,
+    intonation: 0,
   },
 };
 
@@ -190,7 +141,7 @@ const TabButton = ({
 );
 
 // Error Card Component
-const ErrorCard = ({ error }: { error: typeof mockAnalysis.grammar.errors[0] }) => (
+const ErrorCard = ({ error }: { error: AnalysisData['grammar']['errors'][0] }) => (
   <View style={styles.errorCard}>
     <View style={styles.errorHeader}>
       <Text style={styles.errorType}>{error.type}</Text>
@@ -240,7 +191,7 @@ const ErrorCard = ({ error }: { error: typeof mockAnalysis.grammar.errors[0] }) 
 );
 
 // Vocabulary Card Component
-const VocabularyCard = ({ item }: { item: typeof mockAnalysis.vocabulary.suggestions[0] }) => (
+const VocabularyCard = ({ item }: { item: AnalysisData['vocabulary']['suggestions'][0] }) => (
   <View style={styles.vocabCard}>
     <View style={styles.vocabHeader}>
       <View>
@@ -279,7 +230,7 @@ const VocabularyCard = ({ item }: { item: typeof mockAnalysis.vocabulary.suggest
 );
 
 // Word Level Chart
-const WordLevelChart = ({ levels }: { levels: typeof mockAnalysis.vocabulary.wordLevels }) => {
+const WordLevelChart = ({ levels }: { levels: AnalysisData['vocabulary']['wordLevels'] }) => {
   const maxValue = Math.max(...Object.values(levels));
   
   return (
@@ -318,8 +269,8 @@ export default function AnalysisScreen() {
     }
   }, [params.sessionId]);
   
-  // Use store data or fallback to mock
-  const data = analysis || mockAnalysis;
+  // Use store data or empty default
+  const data = analysis || emptyAnalysis;
   
   const tabColors = {
     grammar: '#22c55e',

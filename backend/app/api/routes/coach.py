@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Header
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.core.cache import cache
 from app.core.security import get_current_user
 from app.db.supabase import db_service
 from app.services.coach_engine import coach_engine
@@ -198,18 +199,48 @@ async def _fetch_assets_map(user_id: str, session_ids: list[str]) -> dict[str, d
     return {str(row.get("session_id")): row for row in rows if row.get("session_id")}
 
 
+async def _batch_fetch_turns(session_ids: list[str]) -> dict[str, list[dict]]:
+    """Fetch conversation turns for multiple sessions in a single query (fixes N+1)."""
+    if not session_ids:
+        return {}
+    try:
+        rows = (
+            db_service.client.table("conversation_turns")
+            .select("*")
+            .in_("session_id", session_ids)
+            .order("sequence_order")
+            .execute()
+        ).data or []
+    except Exception:
+        # Fallback to per-session queries if batch fails
+        result: dict[str, list[dict]] = {}
+        for sid in session_ids:
+            result[sid] = await db_service.get_conversation_turns(sid)
+        return result
+
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for row in rows:
+        sid = str(row.get("session_id", ""))
+        if sid:
+            grouped[sid].append(row)
+    return grouped
+
+
 async def _build_session_metrics(
     sessions: list[dict],
     errors_by_session: dict[str, list[dict]],
     assets_map: dict[str, dict],
 ) -> list[dict]:
+    session_ids = [str(s["id"]) for s in sessions if s.get("id")]
+    turns_by_session = await _batch_fetch_turns(session_ids)
+
     metrics = []
     for session in sessions:
         session_id = str(session.get("id"))
         if not session_id:
             continue
 
-        turns = await db_service.get_conversation_turns(session_id)
+        turns = turns_by_session.get(session_id, [])
         user_text_parts = []
         pause_count = 0
 
@@ -344,8 +375,15 @@ async def get_daily_mission(current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     today = datetime.now(timezone.utc).date().isoformat()
 
+    # Check cache first (TTL 24h)
+    cache_key = f"daily_mission:{user_id}:{today}"
+    cached = await cache.get(cache_key)
+    if cached:
+        return cached
+
     stored = await db_service.get_coach_daily_mission(user_id, today)
     if stored and isinstance(stored.get("mission_payload"), dict):
+        await cache.set(cache_key, stored["mission_payload"], ttl=86400)
         return stored["mission_payload"]
 
     mission_history_rows = await db_service.get_coach_mission_history(user_id, limit=60)
@@ -382,6 +420,7 @@ async def get_daily_mission(current_user: dict = Depends(get_current_user)):
         best_hour=((mission.get("best_time_to_practice") or {}).get("hour")),
     )
 
+    await cache.set(cache_key, mission, ttl=86400)
     return mission
 
 
@@ -482,10 +521,18 @@ async def submit_mnemonic_feedback(
 
 @router.get("/skill-graph")
 async def get_skill_graph(current_user: dict = Depends(get_current_user)):
-    sessions = await db_service.get_user_sessions(current_user["user_id"], limit=120)
+    user_id = current_user["user_id"]
+    cache_key = f"skill_graph:{user_id}"
+    cached = await cache.get(cache_key)
+    if cached:
+        return cached
+
+    sessions = await db_service.get_user_sessions(user_id, limit=120)
     session_ids = [str(s["id"]) for s in sessions if s.get("id")]
     errors = await _fetch_error_rows(session_ids)
-    return coach_engine.build_skill_graph(errors)
+    result = coach_engine.build_skill_graph(errors)
+    await cache.set(cache_key, result, ttl=600)  # 10 min
+    return result
 
 
 @router.get("/memory")

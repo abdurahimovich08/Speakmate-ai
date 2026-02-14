@@ -2,19 +2,24 @@
    App - Root component with routing and Telegram init
    =========================== */
 
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { telegramService } from './services/telegram'
 import { useAuthStore } from './stores/authStore'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { ToastProvider } from './components/ui/Toast'
+import { CoachSkeleton, ScoreCardSkeleton } from './components/ui/Skeleton'
 
 import Layout from './components/Layout'
 import Home from './pages/Home'
-import Coach from './pages/Coach'
-import Practice from './pages/Practice'
-import Session from './pages/Session'
-import Results from './pages/Results'
-import History from './pages/History'
-import Profile from './pages/Profile'
+
+// Lazy-loaded route components (code splitting)
+const Coach = lazy(() => import('./pages/Coach'))
+const Practice = lazy(() => import('./pages/Practice'))
+const Session = lazy(() => import('./pages/Session'))
+const Results = lazy(() => import('./pages/Results'))
+const History = lazy(() => import('./pages/History'))
+const Profile = lazy(() => import('./pages/Profile'))
 
 export default function App() {
   const { login, loading, error, token, hydrated } = useAuthStore()
@@ -68,17 +73,35 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/session/active" element={<Session />} />
+    <ToastProvider>
+      <ErrorBoundary>
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-sm-bg"><CoachSkeleton /></div>}>
+          <Routes>
+            <Route path="/session/active" element={
+              <ErrorBoundary><Session /></ErrorBoundary>
+            } />
 
-      <Route element={<Layout />}>
-        <Route path="/" element={<Home />} />
-        <Route path="/coach" element={<Coach />} />
-        <Route path="/practice" element={<Practice />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/results/:id" element={<Results />} />
-      </Route>
-    </Routes>
+            <Route element={<Layout />}>
+              <Route path="/" element={<Home />} />
+              <Route path="/coach" element={
+                <ErrorBoundary fallback={<CoachSkeleton />}><Coach /></ErrorBoundary>
+              } />
+              <Route path="/practice" element={
+                <ErrorBoundary><Practice /></ErrorBoundary>
+              } />
+              <Route path="/history" element={
+                <ErrorBoundary><History /></ErrorBoundary>
+              } />
+              <Route path="/profile" element={
+                <ErrorBoundary><Profile /></ErrorBoundary>
+              } />
+              <Route path="/results/:id" element={
+                <ErrorBoundary fallback={<ScoreCardSkeleton />}><Results /></ErrorBoundary>
+              } />
+            </Route>
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
+    </ToastProvider>
   )
 }

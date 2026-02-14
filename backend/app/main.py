@@ -15,6 +15,7 @@ import logging
 import sys
 
 from app.core.config import settings
+from app.core.exceptions import SpeakMateError
 from app.api.routes import users, sessions, feedback, auth
 from app.api.routes import training, analysis, coach
 from app.api.websocket.conversation import router as ws_router
@@ -116,6 +117,13 @@ if settings.RATE_LIMIT_ENABLED:
 # Add monitoring middleware
 app.add_middleware(RequestTracingMiddleware)
 
+# Warn if CORS is wide open in production
+if settings.ENVIRONMENT != "development" and "*" in settings.CORS_ORIGINS:
+    logging.getLogger(__name__).warning(
+        "CORS_ORIGINS contains '*' in non-development environment. "
+        "Set explicit origins for production security."
+    )
+
 # Add CORS middleware last so it wraps all responses (including middleware/errors)
 app.add_middleware(
     CORSMiddleware,
@@ -127,9 +135,23 @@ app.add_middleware(
 
 
 # Exception handlers
+@app.exception_handler(SpeakMateError)
+async def speakmate_exception_handler(request: Request, exc: SpeakMateError):
+    """Handler for all SpeakMate custom exceptions."""
+    logger.warning(f"SpeakMateError [{exc.status_code}]: {exc.detail} | path={request.url.path}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": type(exc).__name__,
+            "message": exc.detail,
+            **({"details": exc.extra} if exc.extra and settings.DEBUG else {}),
+        },
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Global exception handler."""
+    """Global exception handler for unexpected errors."""
     error_tracker.capture_exception(exc, {
         "path": request.url.path,
         "method": request.method

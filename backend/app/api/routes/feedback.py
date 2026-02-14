@@ -11,7 +11,7 @@ from app.core.security import get_current_user
 from app.db.supabase import db_service
 from app.models.schemas import SessionFeedback, PDFReportRequest, PDFReportResponse
 from app.services.pdf import PDFGenerator
-from app.services.analyzer import ErrorAnalyzer
+from app.services.hybrid_analyzer import HybridErrorAnalyzer
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
@@ -86,7 +86,7 @@ async def get_session_feedback(
     conversation = await db_service.get_conversation_turns(str(session_id))
     scores = session.get("overall_scores") if isinstance(session.get("overall_scores"), dict) else {}
 
-    analyzer = ErrorAnalyzer()
+    analyzer = HybridErrorAnalyzer()
     recommendations = await analyzer.get_improvement_suggestions(errors, scores)
     strengths = _score_strengths(scores)
     summary = _score_summary(scores, len(errors))
