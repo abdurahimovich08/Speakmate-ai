@@ -43,6 +43,13 @@ function getUserTimezone(): string {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token
   const tz = getUserTimezone()
+
+  // Skip authenticated requests if token isn't available yet (prevents 403 noise)
+  const isAuthRoute = path.includes('/auth/')
+  if (!token && !isAuthRoute) {
+    throw new Error('Not authenticated yet')
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(tz ? { 'X-Timezone': tz } : {}),

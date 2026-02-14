@@ -28,15 +28,18 @@ const fadeUp = {
 
 export default function Home() {
   const user = useAuthStore((s) => s.user)
+  const token = useAuthStore((s) => s.token)
   const { streak, loadStreak, mission, loadMission } = useGamificationStore()
   const [stats, setStats] = useState<Record<string, unknown> | null>(null)
   const navigate = useNavigate()
 
+  // Only fire API calls once we have a valid token
   useEffect(() => {
+    if (!token) return
     loadStreak()
     loadMission()
     getUserStats().then(setStats).catch(() => {})
-  }, [loadStreak, loadMission])
+  }, [token, loadStreak, loadMission])
 
   const name = user?.full_name || telegramService.user?.first_name || 'Learner'
 

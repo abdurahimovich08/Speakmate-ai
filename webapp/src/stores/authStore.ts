@@ -43,8 +43,14 @@ export const useAuthStore = create<AuthState>()(
 
         set({ loading: true, error: null })
         try {
-          const { token, user } = await authenticateTelegram(initData)
-          set({ token, user, loading: false })
+          const resp = await authenticateTelegram(initData)
+          const token = resp?.token
+          const user = resp?.user
+          if (!token) {
+            set({ error: 'Server returned empty token. Try again.', loading: false })
+            return
+          }
+          set({ token, user: user || null, loading: false })
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : 'Authentication failed'
           set({ error: msg, loading: false })
