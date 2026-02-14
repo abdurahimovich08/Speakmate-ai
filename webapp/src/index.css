@@ -12,10 +12,11 @@
   --sm-font-ui: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --sm-font-display: 'Fraunces', ui-serif, Georgia, serif;
 
-  /* Base fallbacks (no color-mix support). */
+  /* Base fallbacks (no color-mix support).
+     Text fallback MUST contrast with bg fallback. */
   --sm-bg: var(--tg-theme-bg-color, #0b1220);
-  --sm-text: var(--tg-theme-text-color, #0b1220);
-  --sm-muted: var(--tg-theme-hint-color, #6b7280);
+  --sm-text: var(--tg-theme-text-color, #e8eaed);
+  --sm-muted: var(--tg-theme-hint-color, #8b949e);
   --sm-accent: var(--tg-theme-button-color, #2481cc);
   --sm-accent-2: var(--tg-theme-link-color, #2481cc);
   --sm-card: var(--tg-theme-section-bg-color, rgba(255, 255, 255, 0.92));
@@ -46,8 +47,8 @@
     --sm-bg: color-mix(in srgb, var(--tg-theme-bg-color, #0b1220) 92%, var(--sm-accent) 8%);
     --sm-card: color-mix(in srgb, var(--tg-theme-section-bg-color, #ffffff) 92%, var(--sm-accent) 8%);
     --sm-card-2: color-mix(in srgb, var(--tg-theme-secondary-bg-color, #111827) 92%, var(--sm-accent) 8%);
-    --sm-text: var(--tg-theme-text-color, #0b1220);
-    --sm-muted: color-mix(in srgb, var(--tg-theme-hint-color, #6b7280) 86%, var(--sm-text) 14%);
+    --sm-text: var(--tg-theme-text-color, #e8eaed);
+    --sm-muted: color-mix(in srgb, var(--tg-theme-hint-color, #8b949e) 86%, var(--sm-text) 14%);
     --sm-border: color-mix(in srgb, var(--sm-text) 12%, transparent);
     --sm-accent-2: color-mix(in srgb, var(--sm-accent) 70%, var(--sm-text) 30%);
 
