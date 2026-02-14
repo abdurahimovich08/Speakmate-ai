@@ -7,6 +7,12 @@ Full pipeline:
 - RealtimeCoach for in-session coaching tips
 - AnalysisCoordinator for end-of-session deep analysis
 - ConversationService with 3 coaching modes
+
+Audio flow:
+- Frontend sends audio chunks every 3s (accumulated WebM blobs)
+- Interim chunks: quick transcription for real-time display
+- Final chunk (on stop): full transcription with word timestamps
+- End session: deep analysis on full transcription
 """
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Optional, List, Dict
@@ -46,6 +52,7 @@ class ConnectionManager:
             "coaching_tips": [],   # tips given during session
             "turn_count": 0,
             "start_time": datetime.utcnow(),
+            "last_interim_text": "",  # track last interim transcription
         }
 
     def disconnect(self, session_id: str):
@@ -55,7 +62,10 @@ class ConnectionManager:
     async def send_message(self, session_id: str, message: dict):
         ws = self.active_connections.get(session_id)
         if ws:
-            await ws.send_json(message)
+            try:
+                await ws.send_json(message)
+            except Exception as e:
+                logger.warning(f"Failed to send WS message to {session_id[:8]}: {e}")
 
     def get(self, session_id: str) -> dict:
         return self.session_data.get(session_id, {})
@@ -91,7 +101,7 @@ async def conversation_websocket(
     Auth: supply token via ?token= query param or Authorization header.
 
     Message types from client:
-      - audio_chunk: base64 audio
+      - audio_chunk: base64 audio (is_final=false for interim, true for final)
       - text_input:  direct text (testing)
       - end_session: end conversation
       - get_status:  session status
@@ -175,29 +185,50 @@ async def conversation_websocket(
                 is_final = payload.get("is_final", False)
 
                 if audio_data:
-                    audio_bytes = base64.b64decode(audio_data)
-                    transcription = await speech_service.transcribe_audio(
-                        audio_bytes, is_final=is_final
+                    try:
+                        audio_bytes = base64.b64decode(audio_data)
+                    except Exception as e:
+                        logger.error(f"Failed to decode audio base64: {e}")
+                        continue
+
+                    if len(audio_bytes) < 100:
+                        logger.debug(f"Audio chunk too small ({len(audio_bytes)}b), skipping")
+                        continue
+
+                    # Transcribe using chunk-based method
+                    transcription = await speech_service.transcribe_chunk(
+                        session_id=session_id,
+                        audio_data=audio_bytes,
+                        is_final=is_final,
                     )
 
                     if transcription and transcription.get("text"):
+                        text = transcription["text"].strip()
+
                         # Send transcription to client
                         await manager.send_message(session_id, {
                             "type": "transcription",
                             "data": {
-                                "text": transcription["text"],
-                                "is_final": transcription.get("is_final", False),
+                                "text": text,
+                                "is_final": is_final,
                                 "confidence": transcription.get("confidence", 0),
                             },
                         })
 
-                        # Collect utterance data for pronunciation analysis
-                        if transcription.get("is_final"):
+                        # For final transcription: collect utterance + process message
+                        if is_final:
+                            logger.info(
+                                f"Final transcription [{session_id[:8]}]: "
+                                f"{text[:100]}... ({len(transcription.get('words', []))} words)"
+                            )
+
+                            # Collect utterance data for pronunciation analysis
                             _collect_utterance(sd, transcription)
 
+                            # Process user message (error analysis, AI response)
                             await _process_user_message(
                                 session_id=session_id,
-                                text=transcription["text"],
+                                text=text,
                                 session=session,
                                 mode=mode,
                                 conversation_service=conversation_service,
@@ -207,6 +238,24 @@ async def conversation_websocket(
                                 target_band=target_band,
                                 error_profile_summary=error_profile_summary,
                             )
+                        else:
+                            # Track interim text for debugging
+                            sd["last_interim_text"] = text
+                    elif is_final:
+                        # Final chunk but empty transcription - log warning
+                        logger.warning(
+                            f"Empty final transcription [{session_id[:8]}]. "
+                            f"Audio size: {len(audio_bytes)}b. "
+                            f"Error: {transcription.get('error', 'none')}"
+                        )
+                        # Notify client about transcription issue
+                        await manager.send_message(session_id, {
+                            "type": "transcription_error",
+                            "data": {
+                                "message": "Could not transcribe audio. Please try speaking louder or closer to the microphone.",
+                                "error": transcription.get("error", ""),
+                            },
+                        })
 
             elif msg_type == "text_input":
                 text = payload.get("text", "")
@@ -255,6 +304,8 @@ async def conversation_websocket(
         except Exception as e:
             logger.error(f"Error ending session on disconnect: {e}")
     finally:
+        # Clean up speech service session buffer
+        speech_service.cleanup_session(session_id)
         manager.disconnect(session_id)
 
 
@@ -398,6 +449,28 @@ async def _end_conversation(
     utterances = sd.get("utterances", [])
     native_language = session.get("native_language", "uz")
 
+    logger.info(
+        f"Ending session [{session_id[:8]}]: "
+        f"transcription_length={len(full_transcription)}, "
+        f"utterances={len(utterances)}, "
+        f"duration={duration_seconds}s"
+    )
+
+    # If transcription is empty, warn but still try analysis
+    if not full_transcription.strip():
+        logger.warning(
+            f"Empty transcription for session {session_id}. "
+            f"Conversation history: {len(sd.get('conversation_history', []))} turns. "
+            f"Last interim: {sd.get('last_interim_text', 'none')[:50]}"
+        )
+        # Notify client
+        await manager.send_message(session_id, {
+            "type": "analysis_warning",
+            "data": {
+                "message": "No speech was detected. Results may be limited.",
+            },
+        })
+
     # ---- Deep analysis via AnalysisCoordinator ----
     try:
         result = await analysis_coordinator.run_deep_analysis(
@@ -456,7 +529,6 @@ async def _end_conversation(
     # ---- Save errors to DB ----
     if all_errors:
         try:
-            # Format errors for the existing detected_errors table
             formatted = []
             for err in all_errors:
                 formatted.append({
@@ -537,18 +609,47 @@ async def _end_conversation(
 # =====================================================================
 def _collect_utterance(sd: dict, transcription: dict):
     """Collect utterance data for pronunciation engine."""
+    text = transcription.get("text", "").strip()
+    if not text:
+        return
+
     utterance = {
-        "text": transcription.get("text", ""),
+        "text": text,
         "confidence": transcription.get("confidence", 0),
         "word_timestamps": [],
     }
-    for word_info in transcription.get("words", []):
-        utterance["word_timestamps"].append({
-            "word": word_info.get("word", ""),
-            "start_ms": int(word_info.get("start_time", 0) * 1000),
-            "end_ms": int(word_info.get("end_time", 0) * 1000),
-        })
+
+    words = transcription.get("words", [])
+    if words:
+        for word_info in words:
+            utterance["word_timestamps"].append({
+                "word": word_info.get("word", ""),
+                "start_ms": int(word_info.get("start_time", 0) * 1000),
+                "end_ms": int(word_info.get("end_time", 0) * 1000),
+                "confidence": word_info.get("confidence", 0.9),
+            })
+        # Calculate duration from word timestamps
+        if utterance["word_timestamps"]:
+            utterance["duration_ms"] = utterance["word_timestamps"][-1]["end_ms"]
+    else:
+        # Estimate duration from word count (average ~150 WPM)
+        word_count = len(text.split())
+        utterance["duration_ms"] = int(word_count / 150 * 60 * 1000)
+        # Create estimated timestamps
+        avg_word_ms = utterance["duration_ms"] / max(word_count, 1)
+        for i, word in enumerate(text.split()):
+            utterance["word_timestamps"].append({
+                "word": word,
+                "start_ms": int(i * avg_word_ms),
+                "end_ms": int((i + 1) * avg_word_ms),
+                "confidence": 0.8,
+            })
+
     sd["utterances"].append(utterance)
+    logger.debug(
+        f"Collected utterance: {len(text)} chars, "
+        f"{len(utterance['word_timestamps'])} word timestamps"
+    )
 
 
 async def _load_user_profile(user_id: str) -> dict:

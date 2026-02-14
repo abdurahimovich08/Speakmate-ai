@@ -1,4 +1,4 @@
-/* StreakBadge — Fire icon with streak count, glow + shake effects */
+/* StreakBadge — Fire icon with streak count, server-driven warning */
 
 import { motion } from 'framer-motion'
 
@@ -6,11 +6,21 @@ interface Props {
   streak: number
   todayCompleted: boolean
   compact?: boolean
+  freezeAvailable?: boolean
+  isComeback?: boolean
+  streakWarning?: string | null
 }
 
-export default function StreakBadge({ streak, todayCompleted, compact = false }: Props) {
+export default function StreakBadge({
+  streak,
+  todayCompleted,
+  compact = false,
+  freezeAvailable = false,
+  isComeback = false,
+  streakWarning = null,
+}: Props) {
   const isActive = streak > 0
-  const isAboutToBreak = !todayCompleted && streak > 0
+  const needsAction = !todayCompleted && streak > 0
 
   if (compact) {
     return (
@@ -22,31 +32,39 @@ export default function StreakBadge({ streak, todayCompleted, compact = false }:
   }
 
   return (
-    <motion.div
-      className={`inline-flex items-center gap-2 px-3 py-2 rounded-2xl border transition-colors ${
-        isActive
-          ? 'bg-orange-500/10 border-orange-500/20'
-          : 'bg-sm-card2 border-sm-border'
-      }`}
-      animate={isAboutToBreak ? {
-        rotate: [0, -3, 3, -3, 3, 0],
-      } : {}}
-      transition={{ duration: 0.5, repeat: isAboutToBreak ? Infinity : 0, repeatDelay: 4 }}
-    >
-      <motion.span
-        className="text-lg"
-        animate={isActive ? { scale: [1, 1.15, 1] } : {}}
-        transition={{ duration: 2, repeat: Infinity }}
+    <div className="flex flex-col gap-1">
+      <motion.div
+        className={`inline-flex items-center gap-2 px-3 py-2 rounded-2xl border transition-colors ${
+          isActive
+            ? 'bg-orange-500/10 border-orange-500/20'
+            : 'bg-sm-card2 border-sm-border'
+        }`}
+        animate={needsAction ? {
+          rotate: [0, -2, 2, -2, 2, 0],
+        } : {}}
+        transition={{ duration: 0.5, repeat: needsAction ? Infinity : 0, repeatDelay: 5 }}
       >
-        🔥
-      </motion.span>
-      <div className="leading-none">
-        <p className="text-sm font-bold tabular-nums">{streak}</p>
-        <p className="text-[10px] text-sm-muted">streak</p>
-      </div>
-      {isAboutToBreak && (
-        <span className="text-[10px] text-orange-400 font-medium">Saqlang!</span>
+        <motion.span
+          className="text-lg"
+          animate={isActive ? { scale: [1, 1.1, 1] } : {}}
+          transition={{ duration: 2.5, repeat: Infinity }}
+        >
+          🔥
+        </motion.span>
+        <div className="leading-none">
+          <p className="text-sm font-bold tabular-nums">{streak}</p>
+          <p className="text-[10px] text-sm-muted">
+            {isComeback ? 'qaytdingiz!' : 'streak'}
+          </p>
+        </div>
+        {needsAction && freezeAvailable && (
+          <span className="text-[10px] text-blue-400 font-medium">❄️ Freeze</span>
+        )}
+      </motion.div>
+      {/* Server-driven warning: local-date aware */}
+      {streakWarning && (
+        <p className="text-[10px] text-orange-400 font-medium px-1">{streakWarning}</p>
       )}
-    </motion.div>
+    </div>
   )
 }

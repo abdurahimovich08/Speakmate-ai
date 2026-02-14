@@ -92,13 +92,12 @@
 
   .sm-nav {
     background: var(--sm-card);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--sm-border);
   }
 
   @supports (color: color-mix(in srgb, #000, #fff)) {
     .sm-nav {
-      background: color-mix(in srgb, var(--sm-card) 86%, transparent);
+      background: color-mix(in srgb, var(--sm-card) 96%, transparent);
     }
   }
 
@@ -182,12 +181,70 @@ html {
   animation: spin-slow 3s linear infinite;
 }
 
-/* Glass card */
+/* Glass card — use sparingly: only on hero/CTA elements.
+   Feature detection: only apply blur if browser supports it. */
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .sm-glass {
+    background: var(--sm-glass);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--sm-glass-border);
+  }
+}
+/* Fallback: no blur support → solid card */
 .sm-glass {
-  background: var(--sm-glass);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--sm-glass-border);
+  background: var(--sm-glass, var(--sm-card));
+  border: 1px solid var(--sm-glass-border, var(--sm-border));
+}
+
+/* Performance mode: body[data-perf-mode="1"] disables all glass/effects */
+body[data-perf-mode="1"] .sm-glass {
+  background: var(--sm-card) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  border: 1px solid var(--sm-border) !important;
+}
+body[data-perf-mode="1"] .animate-breathe,
+body[data-perf-mode="1"] .animate-pulse-ring,
+body[data-perf-mode="1"] .text-shimmer {
+  animation: none !important;
+}
+body[data-perf-mode="1"] .confetti-container { display: none !important; }
+
+/* ---- Accessibility: reduced transparency ---- */
+@media (prefers-reduced-transparency: reduce) {
+  .sm-glass {
+    background: var(--sm-card) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    border: 1px solid var(--sm-border) !important;
+  }
+}
+
+/* Nav elevation on scroll */
+.sm-nav-elevated {
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.12);
+}
+
+/* ---- Accessibility: reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-breathe,
+  .animate-pulse-ring,
+  .animate-spin-slow,
+  .animate-streak-shake,
+  .animate-float-up,
+  .animate-fade-in,
+  .animate-slide-in-right,
+  .text-shimmer {
+    animation: none !important;
+  }
+  .confetti-container { display: none !important; }
 }
 
 /* No scrollbar utility */

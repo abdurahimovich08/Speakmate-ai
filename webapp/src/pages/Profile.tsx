@@ -2,20 +2,22 @@
    Profile - Premium profile with level, achievements, progress chart
    =========================== */
 
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useTelegramBackButton } from '../hooks/useTelegram'
 import { useAuthStore } from '../stores/authStore'
 import { useGamificationStore } from '../stores/gamificationStore'
-import { getUserStats, updateProfile, getSessionHistory } from '../services/api'
+import { getUserStats, updateProfile, getSessionHistory, getErrorFingerprint } from '../services/api'
 import { telegramService } from '../services/telegram'
 import { Button } from '../components/ui/Button'
 import { Card, SoftCard, GlassCard } from '../components/ui/Card'
 import StreakBadge from '../components/gamification/StreakBadge'
 import XPBar from '../components/gamification/XPBar'
 import AchievementGrid from '../components/gamification/AchievementGrid'
-import ProgressChart from '../components/gamification/ProgressChart'
 import AnimatedNumber from '../components/gamification/AnimatedNumber'
+
+const ProgressChart = lazy(() => import('../components/gamification/ProgressChart'))
 
 const bandOptions = [5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0]
 const languageOptions = [
@@ -204,27 +206,32 @@ export default function Profile() {
         </SoftCard>
       </motion.div>
 
+      {/* Error Fingerprint */}
+      <ErrorFingerprintCard />
+
       {/* Achievements */}
       {streak && streak.achievements && (
         <motion.div variants={fadeUp}>
-          <GlassCard className="p-4 mb-4">
+          <Card className="p-4 mb-4">
             <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted mb-3 font-semibold">
               Yutuqlar
             </p>
             <AchievementGrid achievements={streak.achievements} />
-          </GlassCard>
+          </Card>
         </motion.div>
       )}
 
       {/* Progress chart */}
       {chartData.length >= 2 && (
         <motion.div variants={fadeUp}>
-          <GlassCard className="p-4 mb-4">
+          <Card className="p-4 mb-4">
             <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted mb-2 font-semibold">
               Band trendi
             </p>
-            <ProgressChart data={chartData} height={150} />
-          </GlassCard>
+            <Suspense fallback={<div className="h-36 flex items-center justify-center text-sm text-sm-muted">Loading chart...</div>}>
+              <ProgressChart data={chartData} height={150} />
+            </Suspense>
+          </Card>
         </motion.div>
       )}
 
@@ -352,6 +359,90 @@ export default function Profile() {
         <p>SpeakMate AI v1.0.0</p>
         <p>Platform: {telegramService.platform}</p>
       </div>
+    </motion.div>
+  )
+}
+
+/** Error Fingerprint Card — top 3 recurring mistakes with improvement trend + tips */
+function ErrorFingerprintCard() {
+  const [errors, setErrors] = useState<Array<{
+    category: string
+    subcategory: string
+    count: number
+    trend: 'improving' | 'stable' | 'worsening'
+    sessions_without: number
+    tip?: string
+  }>>([])
+  const [status, setStatus] = useState<string>('')
+
+  useEffect(() => {
+    getErrorFingerprint()
+      .then((data) => {
+        const items = (data.errors || []) as typeof errors
+        setErrors(items)
+        setStatus((data.status as string) || '')
+      })
+      .catch(() => {})
+  }, [])
+
+  // Graceful new-user: show encouragement
+  if (status === 'new_user') {
+    return (
+      <motion.div variants={fadeUp}>
+        <Card className="p-4 mb-4">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted mb-2 font-semibold">
+            Mening xatolarim
+          </p>
+          <p className="text-sm text-sm-muted">
+            Yana 2-3 ta sessiya qiling — xatolaringiz tahlili bu yerda chiqadi.
+          </p>
+        </Card>
+      </motion.div>
+    )
+  }
+
+  if (errors.length === 0) return null
+
+  const trendIcon = (t: string) =>
+    t === 'improving' ? '↓' : t === 'worsening' ? '↑' : '→'
+  const trendColor = (t: string) =>
+    t === 'improving' ? 'text-sm-energy' : t === 'worsening' ? 'text-sm-danger' : 'text-sm-muted'
+
+  return (
+    <motion.div variants={fadeUp}>
+      <Card className="p-4 mb-4">
+        <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted mb-3 font-semibold">
+          Mening xatolarim
+        </p>
+        <div className="space-y-2.5">
+          {errors.slice(0, 3).map((err, i) => (
+            <div key={i} className="bg-sm-card2 rounded-xl px-3 py-2.5">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold capitalize">{err.category}</p>
+                  <p className="text-[11px] text-sm-muted">{err.subcategory} · {err.count}x</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-sm font-bold ${trendColor(err.trend)}`}>
+                    {trendIcon(err.trend)}
+                  </span>
+                  {err.sessions_without >= 3 && (
+                    <span className="text-[10px] bg-sm-energy/15 text-sm-energy px-1.5 py-0.5 rounded-lg font-medium">
+                      Fix streak!
+                    </span>
+                  )}
+                </div>
+              </div>
+              {/* Actionable tip */}
+              {err.tip && (
+                <Link to="/practice" className="block mt-1.5 text-[11px] text-sm-accent hover:underline">
+                  → {err.tip}
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
     </motion.div>
   )
 }

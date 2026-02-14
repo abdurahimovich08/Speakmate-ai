@@ -1,8 +1,10 @@
-/* SessionCelebration — Full-screen celebration after session ends */
+/* SessionCelebration — Full-screen celebration after session ends
+   Now includes "Next time do this" actionable tip */
 
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import AnimatedNumber from './AnimatedNumber'
+import { getNextTimeTip } from '../../services/api'
 
 interface Props {
   band: number
@@ -39,6 +41,7 @@ export default function SessionCelebration({
   onContinue,
 }: Props) {
   const [showDetails, setShowDetails] = useState(false)
+  const [nextTip, setNextTip] = useState<{ tip: string; tomorrow_mission?: { title: string } } | null>(null)
   const message = useMemo(randomMessage, [])
 
   useEffect(() => {
@@ -46,9 +49,16 @@ export default function SessionCelebration({
     return () => clearTimeout(t)
   }, [])
 
-  // Auto-continue after 6 seconds
+  // Fetch actionable tip
   useEffect(() => {
-    const t = setTimeout(onContinue, 8000)
+    getNextTimeTip()
+      .then((data) => setNextTip(data as typeof nextTip))
+      .catch(() => {})
+  }, [])
+
+  // Auto-continue after 10 seconds (more time with tip)
+  useEffect(() => {
+    const t = setTimeout(onContinue, 10000)
     return () => clearTimeout(t)
   }, [onContinue])
 
@@ -149,13 +159,33 @@ export default function SessionCelebration({
           </motion.div>
         )}
 
+        {/* Actionable tip: "Next time do this" */}
+        {nextTip && showDetails && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.2 }}
+            className="mt-5 mx-4 bg-sm-card2 rounded-xl px-4 py-3 text-left"
+          >
+            <p className="text-[10px] uppercase tracking-[0.15em] text-sm-accent font-bold mb-1">
+              Keyingi safar
+            </p>
+            <p className="text-sm font-medium leading-snug">{nextTip.tip}</p>
+            {nextTip.tomorrow_mission && (
+              <p className="text-[11px] text-sm-muted mt-1.5">
+                Ertangi missiya: <span className="text-sm-accent font-medium">{nextTip.tomorrow_mission.title}</span>
+              </p>
+            )}
+          </motion.div>
+        )}
+
         {/* CTA */}
         <motion.button
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 2 }}
           onClick={onContinue}
-          className="mt-8 sm-btn bg-tg-button text-tg-button-text px-8 py-3"
+          className="mt-6 sm-btn bg-tg-button text-tg-button-text px-8 py-3"
         >
           Natijalarni ko'rish →
         </motion.button>
@@ -165,21 +195,30 @@ export default function SessionCelebration({
 }
 
 function Confetti() {
+  // Respect prefers-reduced-motion
+  const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
   const colors = ['#2481cc', '#22c55e', '#f97316', '#ffffff', '#a855f7', '#eab308']
 
   const particles = useMemo(
     () =>
-      Array.from({ length: 30 }, (_, i) => ({
-        id: i,
-        left: `${Math.random() * 100}%`,
-        delay: `${Math.random() * 1.5}s`,
-        duration: `${2 + Math.random() * 1.5}s`,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        size: 4 + Math.random() * 6,
-        rotation: Math.random() * 360,
-      })),
-    [],
+      prefersReducedMotion
+        ? []
+        : Array.from({ length: 30 }, (_, i) => ({
+            id: i,
+            left: `${Math.random() * 100}%`,
+            delay: `${Math.random() * 1.5}s`,
+            duration: `${2 + Math.random() * 1.5}s`,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            size: 4 + Math.random() * 6,
+            rotation: Math.random() * 360,
+          })),
+    [prefersReducedMotion],
   )
+
+  if (prefersReducedMotion || particles.length === 0) return null
 
   return (
     <div className="confetti-container">

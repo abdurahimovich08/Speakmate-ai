@@ -54,6 +54,25 @@ export default function App() {
   const [initError, setInitError] = useState<string | null>(null)
   const location = useLocation()
 
+  // Scroll management: save scroll position per path, restore on back, reset on forward
+  useEffect(() => {
+    const key = `sm_scroll_${location.pathname}`
+    const saved = sessionStorage.getItem(key)
+
+    // If navigating back/forward (popstate), try to restore scroll
+    const navType = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type
+    if (saved && (navType === 'back_forward' || (window.history.state && window.history.state.idx !== undefined))) {
+      window.scrollTo(0, parseInt(saved, 10))
+    } else {
+      window.scrollTo(0, 0)
+    }
+
+    // Save scroll position before leaving this route
+    return () => {
+      sessionStorage.setItem(`sm_scroll_${location.pathname}`, String(window.scrollY))
+    }
+  }, [location.pathname])
+
   useEffect(() => {
     telegramService.init()
   }, [])
@@ -116,8 +135,30 @@ export default function App() {
     )
   }
 
-  // Check onboarding
-  const onboardingDone = localStorage.getItem('sm_onboarding_done')
+  // Check onboarding — localStorage first (fast), then backend verification
+  const [onboardingChecked, setOnboardingChecked] = useState(false)
+  const onboardingDoneLocal = localStorage.getItem('sm_onboarding_done')
+  const [onboardingDone, setOnboardingDone] = useState(!!onboardingDoneLocal)
+
+  useEffect(() => {
+    if (onboardingDoneLocal || onboardingChecked) return
+    // If localStorage says not done, verify with backend
+    if (token) {
+      import('./services/api').then(({ getProfile }) => {
+        getProfile().then((profile) => {
+          const p = profile as unknown as Record<string, unknown>
+          if (p && p.onboarding_completed_at) {
+            localStorage.setItem('sm_onboarding_done', '1')
+            setOnboardingDone(true)
+          } else if (p && typeof p.onboarding_step === 'number' && (p.onboarding_step as number) > 0) {
+            // Resume from saved step (Zeigarnik)
+            localStorage.setItem('sm_onboarding_step', String(p.onboarding_step))
+          }
+          setOnboardingChecked(true)
+        }).catch(() => setOnboardingChecked(true))
+      })
+    }
+  }, [token, onboardingDoneLocal, onboardingChecked])
 
   return (
     <ToastProvider>

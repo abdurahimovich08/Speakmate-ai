@@ -43,6 +43,9 @@ class UserProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     native_language: Optional[str] = None
     target_band: Optional[float] = None
+    onboarding_completed_at: Optional[str] = None
+    timezone: Optional[str] = None
+    onboarding_step: Optional[int] = None
 
 
 # Session schemas

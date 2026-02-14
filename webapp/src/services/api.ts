@@ -31,10 +31,21 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   }
 }
 
+/** Get IANA timezone once, cache it */
+let _cachedTz: string | undefined
+function getUserTimezone(): string {
+  if (!_cachedTz) {
+    try { _cachedTz = Intl.DateTimeFormat().resolvedOptions().timeZone } catch { _cachedTz = '' }
+  }
+  return _cachedTz || ''
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token
+  const tz = getUserTimezone()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...(tz ? { 'X-Timezone': tz } : {}),
     ...(options.headers as Record<string, string>),
   }
   if (token) {
@@ -233,4 +244,16 @@ export async function getSessionHistory(days = 30) {
 
 export async function getAchievements() {
   return request<Record<string, unknown>[]>('/api/v1/gamification/achievements')
+}
+
+export async function getGamificationMission() {
+  return request<Record<string, unknown>>('/api/v1/gamification/daily-mission')
+}
+
+export async function getNextTimeTip() {
+  return request<Record<string, unknown>>('/api/v1/gamification/next-tip')
+}
+
+export async function getErrorFingerprint() {
+  return request<Record<string, unknown>>('/api/v1/users/me/error-fingerprint')
 }

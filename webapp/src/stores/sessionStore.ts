@@ -174,6 +174,22 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       })
     })
 
+    socket.on('transcription_error', (msg) => {
+      const data = msg.data as { message?: string; error?: string }
+      console.warn('[WS] Transcription error:', data.message, data.error)
+      // Show as system message in conversation
+      get().addMessage({
+        role: 'assistant',
+        content: `⚠️ ${data.message || 'Could not transcribe audio. Please try again.'}`,
+      })
+      set({ isThinking: false })
+    })
+
+    socket.on('analysis_warning', (msg) => {
+      const data = msg.data as { message?: string }
+      console.warn('[WS] Analysis warning:', data.message)
+    })
+
     socket.on('disconnected', (msg) => {
       set({ isConnected: false })
 

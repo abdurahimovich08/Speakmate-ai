@@ -1,6 +1,7 @@
 /* ===========================
    Browser Audio Recording Service
    Uses MediaRecorder API for capturing audio from microphone.
+   Streams audio chunks every 3 seconds for real-time transcription.
    =========================== */
 
 type AudioDataCallback = (base64: string, isFinal: boolean, mimeType?: string) => void
@@ -14,10 +15,10 @@ export class AudioRecorder {
   private stopResolver: (() => void) | null = null
 
   /**
-   * @param onData  Called with base64 audio data every timeslice ms
-   * @param timeslice  How often to emit chunks (ms). Use 0 to emit only once on stop.
+   * @param onData  Called with base64 audio data every timeslice ms and once on stop
+   * @param timeslice  How often to emit chunks (ms). Default 3000ms for streaming.
    */
-  constructor(onData: AudioDataCallback, timeslice = 0) {
+  constructor(onData: AudioDataCallback, timeslice = 3000) {
     this.onData = onData
     this.timeslice = timeslice
   }
@@ -49,17 +50,19 @@ export class AudioRecorder {
     this.mediaRecorder.ondataavailable = async (event) => {
       if (event.data.size > 0) {
         this.chunks.push(event.data)
-        // Streaming partial WebM chunks is unreliable across browsers/servers (often missing headers),
-        // so by default we only send one final blob on stop.
-        if (this.timeslice > 0) {
-          const base64 = await this.blobToBase64(event.data)
+
+        // For streaming mode: send each intermediate chunk as non-final
+        if (this.timeslice > 0 && this.mediaRecorder?.state === 'recording') {
+          // Combine all accumulated chunks into a valid container for this interim send
+          const blob = new Blob(this.chunks, { type: this.mediaRecorder?.mimeType })
+          const base64 = await this.blobToBase64(blob)
           this.onData(base64, false, this.mediaRecorder?.mimeType)
         }
       }
     }
 
     this.mediaRecorder.onstop = async () => {
-      // Send final chunk (combine all remaining)
+      // Send final combined blob with is_final=true
       if (this.chunks.length > 0) {
         const blob = new Blob(this.chunks, { type: this.mediaRecorder?.mimeType })
         const base64 = await this.blobToBase64(blob)
@@ -72,6 +75,7 @@ export class AudioRecorder {
       }
     }
 
+    // Always start with timeslice for streaming
     if (this.timeslice > 0) {
       this.mediaRecorder.start(this.timeslice)
     } else {

@@ -2,6 +2,7 @@
    Layout - Telegram-theme-aware shell with animated tab navigation
    =========================== */
 
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useGamificationStore } from '../stores/gamificationStore'
@@ -17,6 +18,13 @@ const tabs = [
 export default function Layout() {
   const location = useLocation()
   const streak = useGamificationStore((s) => s.streak)
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const activeIndex = tabs.findIndex((t) =>
     t.to === '/' ? location.pathname === '/' : location.pathname.startsWith(t.to),
@@ -29,7 +37,7 @@ export default function Layout() {
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 px-3 sm-safe-bottom">
-        <div className="mx-auto max-w-md sm-nav border border-sm-border shadow-smglow rounded-smxl relative">
+        <div className={`mx-auto max-w-md sm-nav border border-sm-border shadow-smglow rounded-smxl relative transition-shadow duration-200 ${scrolled ? 'sm-nav-elevated' : ''}`}>
           {/* Animated active indicator */}
           {activeIndex >= 0 && (
             <motion.div

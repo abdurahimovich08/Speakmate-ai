@@ -75,6 +75,24 @@ class AnalysisCoordinator:
         
         logger.info(f"Starting fast analysis: {run_id} for session {session_id}")
         
+        # Validate input
+        transcription = (transcription or "").strip()
+        if not transcription:
+            logger.warning(f"Empty transcription for fast analysis [{session_id}]")
+            return {
+                "run_id": run_id,
+                "analysis_type": "fast",
+                "status": "completed_empty",
+                "duration_ms": 0,
+                "error_count": 0,
+                "top_issues": [],
+                "band_estimate": 0,
+                "pronunciation_metrics": None,
+                "feedback": "No speech was detected. Please try again.",
+                "deep_analysis_queued": False,
+                "warning": "Empty transcription",
+            }
+        
         try:
             # Quick rule-based error detection
             quick_errors = await self.error_analyzer.quick_analysis(transcription)
@@ -161,11 +179,62 @@ class AnalysisCoordinator:
         Run comprehensive deep analysis.
         
         Takes 1-3 minutes, runs in background.
+        Handles empty transcriptions gracefully.
         """
         run_id = str(uuid.uuid4())
         started_at = datetime.utcnow()
         
-        logger.info(f"Starting deep analysis: {run_id} for session {session_id}")
+        logger.info(
+            f"Starting deep analysis: {run_id} for session {session_id} "
+            f"(transcription_len={len(transcription or '')}, utterances={len(utterances or [])})"
+        )
+
+        # ---- Input validation ----
+        transcription = (transcription or "").strip()
+        if not transcription:
+            logger.warning(
+                f"Empty transcription for deep analysis [{session_id}]. "
+                f"Returning minimal results."
+            )
+            empty_result = {
+                "run_id": run_id,
+                "analysis_type": "deep",
+                "status": "completed_empty",
+                "duration_ms": 0,
+                "tokens_used": 0,
+                "errors": [],
+                "error_count": 0,
+                "scores": {
+                    "overall_band": 0,
+                    "fluency_coherence": {"band": 0, "description": "No speech detected"},
+                    "lexical_resource": {"band": 0, "description": "No speech detected"},
+                    "grammatical_range": {"band": 0, "description": "No speech detected"},
+                    "pronunciation": {"band": 0, "description": "No speech detected"},
+                },
+                "pronunciation": {},
+                "fluency_metrics": {},
+                "lexical_metrics": {},
+                "grammar_metrics": {},
+                "criterion_feedback": {},
+                "recommendations": [{
+                    "priority": "high",
+                    "area": "General",
+                    "recommendation": "No speech was detected. Please ensure your microphone is working and try speaking louder.",
+                    "resources": ["Microphone test", "Audio settings check"],
+                }],
+                "training_plan": {},
+                "warning": "No transcription available for analysis.",
+            }
+            await self._save_analysis_run(
+                run_id=run_id,
+                session_id=session_id,
+                user_id=user_id,
+                analysis_type="deep",
+                status="completed_empty",
+                result=empty_result,
+                duration_ms=0,
+            )
+            return empty_result
         
         try:
             # Full error analysis with LLM
@@ -175,13 +244,21 @@ class AnalysisCoordinator:
                 native_language=native_language
             )
             
-            # Full pronunciation analysis
+            # Full pronunciation analysis with fallback
             pronunciation_result = {}
             if utterances:
-                pronunciation_result = await self.pronunciation.analyze(
-                    utterances=utterances,
-                    native_language=native_language
-                )
+                try:
+                    pronunciation_result = await self.pronunciation.analyze(
+                        utterances=utterances,
+                        native_language=native_language
+                    )
+                except Exception as e:
+                    logger.warning(f"Pronunciation analysis failed, using fallback: {e}")
+                    pronunciation_result = self._pronunciation_fallback(transcription, utterances)
+            else:
+                # No utterances (no word timestamps) — compute basic pronunciation estimate
+                logger.info(f"No utterances for pronunciation, using text-based fallback [{session_id}]")
+                pronunciation_result = self._pronunciation_fallback(transcription, [])
             
             # Compute detailed IELTS criterion metrics
             fluency_metrics = self.error_analyzer.compute_fluency_metrics(transcription)
@@ -189,12 +266,23 @@ class AnalysisCoordinator:
             grammar_metrics = self.error_analyzer.compute_grammar_metrics(transcription)
 
             # Full IELTS scoring
-            scores = await ielts_scorer.score_with_evidence(
-                transcription=transcription,
-                errors=errors,
-                pronunciation_scores=pronunciation_result,
-                mode=mode
-            )
+            try:
+                scores = await ielts_scorer.score_with_evidence(
+                    transcription=transcription,
+                    errors=errors,
+                    pronunciation_scores=pronunciation_result,
+                    mode=mode
+                )
+            except Exception as e:
+                logger.error(f"IELTS scoring failed, estimating: {e}")
+                band_est = self._estimate_band(errors, None, transcription)
+                scores = {
+                    "overall_band": band_est,
+                    "fluency_coherence": {"band": band_est},
+                    "lexical_resource": {"band": band_est},
+                    "grammatical_range": {"band": band_est},
+                    "pronunciation": {"band": band_est},
+                }
             
             # Generate per-criterion detailed feedback
             try:
@@ -219,7 +307,7 @@ class AnalysisCoordinator:
             
             # Calculate metrics
             duration_ms = int((datetime.utcnow() - started_at).total_seconds() * 1000)
-            tokens_used = ielts_scorer.last_tokens_used + 500  # Estimate
+            tokens_used = getattr(ielts_scorer, 'last_tokens_used', 0) + 500
             
             result = {
                 "run_id": run_id,
@@ -268,10 +356,16 @@ class AnalysisCoordinator:
             except Exception as e:
                 logger.warning(f"Failed to queue PDF generation: {e}")
             
+            logger.info(
+                f"Deep analysis completed [{session_id}]: "
+                f"overall_band={scores.get('overall_band', 'N/A')}, "
+                f"errors={len(errors)}, duration={duration_ms}ms"
+            )
+            
             return result
             
         except Exception as e:
-            logger.error(f"Deep analysis failed: {e}")
+            logger.error(f"Deep analysis failed: {e}", exc_info=True)
             
             # Save failed run
             await self._save_analysis_run(
@@ -286,6 +380,66 @@ class AnalysisCoordinator:
             
             raise
     
+    def _pronunciation_fallback(
+        self,
+        transcription: str,
+        utterances: List[Dict],
+    ) -> Dict[str, Any]:
+        """
+        Generate basic pronunciation metrics when full analysis is unavailable.
+        
+        Uses word count and confidence from utterances when available,
+        otherwise estimates from transcription text.
+        """
+        words = transcription.split()
+        word_count = len(words)
+
+        # Estimate WPM from utterances
+        total_duration_ms = 0
+        total_confidence = 0
+        utterance_count = 0
+        for utt in (utterances or []):
+            dur = utt.get("duration_ms", 0)
+            if dur > 0:
+                total_duration_ms += dur
+            conf = utt.get("confidence", 0)
+            if conf > 0:
+                total_confidence += conf
+                utterance_count += 1
+
+        if total_duration_ms > 0:
+            wpm = (word_count / total_duration_ms * 60_000)
+        else:
+            # Estimate ~140 WPM for average speaker
+            wpm = 140.0
+
+        avg_confidence = (
+            total_confidence / utterance_count if utterance_count > 0 else 0.75
+        )
+
+        # Map confidence to a rough pronunciation band
+        if avg_confidence >= 0.9:
+            pron_band = 7.5
+        elif avg_confidence >= 0.8:
+            pron_band = 7.0
+        elif avg_confidence >= 0.7:
+            pron_band = 6.5
+        elif avg_confidence >= 0.6:
+            pron_band = 6.0
+        else:
+            pron_band = 5.5
+
+        return {
+            "overall_score": pron_band,
+            "is_fallback": True,
+            "prosody": {
+                "speaking_rate": round(wpm, 1),
+                "articulation_rate": round(wpm * 1.1, 1),
+            },
+            "problem_areas": [],
+            "word_scores": [],
+        }
+
     def _estimate_band(
         self,
         errors: List[Dict],

@@ -29,7 +29,7 @@ export function useAudio() {
 
     const recorder = new AudioRecorder((base64, isFinal, mimeType) => {
       socket.sendAudioChunk(base64, isFinal, mimeType)
-    }, 0)
+    }, 3000)
 
     try {
       // Single getUserMedia request is performed inside recorder.start().

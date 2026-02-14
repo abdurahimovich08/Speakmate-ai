@@ -2,16 +2,18 @@
    History - Premium session timeline with charts
    =========================== */
 
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useTelegramBackButton } from '../hooks/useTelegram'
 import { useSessionStore } from '../stores/sessionStore'
 import { getSessionHistory } from '../services/api'
 import { Button } from '../components/ui/Button'
-import { Card, SoftCard, GlassCard } from '../components/ui/Card'
-import ProgressChart from '../components/gamification/ProgressChart'
+import { Card, SoftCard } from '../components/ui/Card'
 import ActivityCalendar from '../components/gamification/ActivityCalendar'
+
+// Lazy-load Recharts-based chart (heavy dependency)
+const ProgressChart = lazy(() => import('../components/gamification/ProgressChart'))
 
 const modeMeta: Record<
   string,
@@ -130,24 +132,26 @@ export default function History() {
       {/* Band trend chart */}
       {chartData.length >= 2 && (
         <motion.div variants={fadeUp}>
-          <GlassCard className="p-4 mb-4">
+          <Card className="p-4 mb-4">
             <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted mb-2 font-semibold">
               Band trendi
             </p>
-            <ProgressChart data={chartData} height={160} />
-          </GlassCard>
+            <Suspense fallback={<div className="h-40 flex items-center justify-center text-sm text-sm-muted">Loading chart...</div>}>
+              <ProgressChart data={chartData} height={160} />
+            </Suspense>
+          </Card>
         </motion.div>
       )}
 
       {/* Activity calendar */}
       {Object.keys(activityMap).length > 0 && (
         <motion.div variants={fadeUp}>
-          <GlassCard className="p-4 mb-4">
+          <Card className="p-4 mb-4">
             <p className="text-[11px] uppercase tracking-[0.18em] text-sm-muted mb-3 font-semibold">
               Faollik
             </p>
             <ActivityCalendar activityMap={activityMap} weeks={12} />
-          </GlassCard>
+          </Card>
         </motion.div>
       )}
 

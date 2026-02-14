@@ -2,21 +2,42 @@
    Onboarding — 4-screen animated onboarding flow
    =========================== */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '../components/ui/Button'
+import { updateProfile } from '../services/api'
 
 const bandScale = [4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0]
 
 export default function Onboarding() {
-  const [step, setStep] = useState(0)
-  const [targetBand, setTargetBand] = useState(6.5)
+  // Resume from saved step (Zeigarnik — user who left mid-onboarding comes back)
+  const savedStep = Number(localStorage.getItem('sm_onboarding_step') || '0')
+  const [step, setStep] = useState(savedStep)
+  const [targetBand, setTargetBand] = useState(
+    Number(localStorage.getItem('sm_target_band') || '6.5'),
+  )
   const navigate = useNavigate()
 
+  // Persist current step so user can resume
+  useEffect(() => {
+    localStorage.setItem('sm_onboarding_step', String(step))
+    // Also persist step to backend (async, fire-and-forget)
+    updateProfile({ onboarding_step: step } as unknown as Parameters<typeof updateProfile>[0]).catch(() => {})
+  }, [step])
+
   const finish = () => {
+    // localStorage for fast check on next load
     localStorage.setItem('sm_onboarding_done', '1')
     localStorage.setItem('sm_target_band', String(targetBand))
+    localStorage.removeItem('sm_onboarding_step')
+    // Persist to backend so it survives device switch
+    updateProfile({
+      target_band: targetBand,
+      onboarding_completed_at: new Date().toISOString(),
+      onboarding_step: 4,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
+    } as unknown as Parameters<typeof updateProfile>[0]).catch(() => {})
     navigate('/', { replace: true })
   }
 
